@@ -1173,9 +1173,14 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start server
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`🚀 CodeQuest Server running at http://localhost:${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+// Start server (only if not in Vercel serverless environment)
+if (process.env.VERCEL !== '1') {
+  const PORT = process.env.PORT || 3000;
+  server.listen(PORT, () => {
+    console.log(`🚀 CodeQuest Server running at http://localhost:${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+}
+
+// Export app for Vercel serverless functions
+module.exports = app;

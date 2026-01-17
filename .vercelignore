@@ -1,0 +1,16 @@
+node_modules
+.env
+.env.local
+.env.*.local
+*.log
+API key.txt
+.git
+.gitignore
+README.md
+DEPLOYMENT.md
+SETUP.md
+START_SERVERS.md
+FEATURES.md
+REDESIGN_NOTES.md
+New folder
+
