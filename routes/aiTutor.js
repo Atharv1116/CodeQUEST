@@ -1,7 +1,7 @@
 const express = require('express');
 const User = require('../models/User');
 const Match = require('../models/Match');
-const { authenticateToken } = require('./auth');
+const authenticateToken = require('../middleware/authenticateToken'); // ✅ FIX
 const { chatWithTutor, analyzePerformance } = require('../services/aiTutor');
 
 const router = express.Router();
@@ -21,6 +21,7 @@ router.post('/chat', authenticateToken, async (req, res) => {
 
     const user = await User.findById(resolvedUserId)
       .select('username rating level xp skills weakTopics wins losses matches streak practiceRecommendations');
+
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
