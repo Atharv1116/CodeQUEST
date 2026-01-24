@@ -14,6 +14,8 @@ export const useAuth = () => {
 // ✅ ADD BASE API URL (FIX)
 const API_URL = import.meta.env.VITE_API_URL;
 
+console.log('API_URL:', API_URL); // Debug log
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -55,9 +57,10 @@ export const AuthProvider = ({ children }) => {
 
       return { success: true };
     } catch (error) {
+      console.error('Login error:', error);
       return {
         success: false,
-        error: error.response?.data?.error || 'Login failed'
+        error: error.response?.data?.error || error.message || 'Login failed'
       };
     }
   };
@@ -76,9 +79,10 @@ export const AuthProvider = ({ children }) => {
 
       return { success: true };
     } catch (error) {
+      console.error('Register error:', error);
       return {
         success: false,
-        error: error.response?.data?.error || 'Registration failed'
+        error: error.response?.data?.error || error.message || 'Registration failed'
       };
     }
   };
