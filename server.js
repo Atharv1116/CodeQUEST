@@ -2,6 +2,8 @@
 // server.js - Enhanced CodeQuest Server
 require('dotenv').config();
 const express = require('express');
+const app = express();
+app.set('trust proxy', 1);
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
@@ -29,7 +31,7 @@ const authRoutes = require('./routes/auth');
 const apiRouter = require('./routes/api');
 const aiTutorRouter = require('./routes/aiTutor');
 
-const app = express();
+
 const server = http.createServer(app);
 
 const io = new Server(server, {
