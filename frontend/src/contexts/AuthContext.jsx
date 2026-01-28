@@ -34,7 +34,12 @@ export const AuthProvider = ({ children }) => {
       const response = await axios.get(`${API_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setUser(response.data);
+      const userData = response.data;
+      // Normalize _id to id for consistency across the app
+      if (userData._id && !userData.id) {
+        userData.id = userData._id;
+      }
+      setUser(userData);
     } catch (error) {
       localStorage.removeItem('token');
       setToken(null);

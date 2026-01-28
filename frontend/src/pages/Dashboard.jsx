@@ -46,7 +46,8 @@ const Dashboard = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await axios.get(`/api/user/${user.id}/stats`, {
+      const userId = user.id || user._id
+      const response = await axios.get(`/api/user/${userId}/stats`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       setStats(response.data)
@@ -59,7 +60,8 @@ const Dashboard = () => {
 
   const fetchMatchHistory = async () => {
     try {
-      const response = await axios.get(`/api/user/${user.id}/matches`, {
+      const userId = user.id || user._id
+      const response = await axios.get(`/api/user/${userId}/matches`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       setMatchHistory(response.data)
@@ -84,11 +86,11 @@ const Dashboard = () => {
 
   const skillData = stats
     ? [
-        { skill: "Algorithms", value: stats.skills?.algorithms || 0 },
-        { skill: "Data Structures", value: stats.skills?.dataStructures || 0 },
-        { skill: "Debugging", value: stats.skills?.debugging || 0 },
-        { skill: "Speed", value: stats.skills?.speed || 0 },
-      ]
+      { skill: "Algorithms", value: stats.skills?.algorithms || 0 },
+      { skill: "Data Structures", value: stats.skills?.dataStructures || 0 },
+      { skill: "Debugging", value: stats.skills?.debugging || 0 },
+      { skill: "Speed", value: stats.skills?.speed || 0 },
+    ]
     : []
 
   return (
@@ -218,9 +220,8 @@ const Dashboard = () => {
                 </div>
                 <motion.span
                   whileHover={{ scale: 1.1 }}
-                  className={`px-4 py-2 rounded-lg font-bold ${
-                    match.winner === user.id ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
-                  }`}
+                  className={`px-4 py-2 rounded-lg font-bold ${match.winner === user.id ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
+                    }`}
                 >
                   {match.winner === user.id ? "Win" : "Loss"}
                 </motion.span>
