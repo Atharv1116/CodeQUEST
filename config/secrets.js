@@ -34,7 +34,7 @@ function loadSecretsFromFile() {
 }
 
 function getAITutorKey() {
-  const envKey = process.env.OPENAI_API_KEY;
+  const envKey = process.env.GROQ_API_KEY;
   if (envKey) {
     return envKey.trim();
   }

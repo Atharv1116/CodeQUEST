@@ -1,19 +1,19 @@
-const OpenAI = require('openai');
+const Groq = require('groq-sdk');
 const { getAITutorKey } = require('../config/secrets');
 
-const DEFAULT_MODEL = process.env.AI_TUTOR_MODEL || 'gpt-4o-mini';
+const DEFAULT_MODEL = process.env.AI_TUTOR_MODEL || 'llama-3.3-70b-versatile';
 
-function getOpenAIClient() {
+function getGroqClient() {
   const apiKey = getAITutorKey();
   if (!apiKey) {
-    throw new Error('AI Tutor API key is missing. Add it to API key.txt or set AI_TUTOR_API_KEY.');
+    throw new Error('AI Tutor API key is missing. Add it to API key.txt or set GROQ_API_KEY.');
   }
 
   // Set the key in process.env for downstream libraries if needed
-  process.env.OPENAI_API_KEY = apiKey;
+  process.env.GROQ_API_KEY = apiKey;
 
   // Always create a fresh client to ensure we use the latest key
-  return new OpenAI({ apiKey });
+  return new Groq({ apiKey });
 }
 
 function sanitizeMessages(messages = []) {
@@ -26,7 +26,7 @@ function sanitizeMessages(messages = []) {
 }
 
 async function chatWithTutor(messages, context = {}) {
-  const client = getOpenAIClient();
+  const client = getGroqClient();
   const { user, performance, matches } = context;
 
   const userSummary = user
@@ -74,13 +74,13 @@ When giving advice, tie it back to the student's goals, strengths, and weaknesse
       status: error.response?.status
     });
     const errorMessage = error.response?.data?.error?.message || error.message;
-    throw new Error(`OpenAI Error: ${errorMessage}`);
+    throw new Error(`Groq API Error: ${errorMessage}`);
   }
 }
 
 async function getAIFeedback(code, problem, error, userAttempts, customPrompt) {
   try {
-    const client = getOpenAIClient();
+    const client = getGroqClient();
     const prompt = customPrompt || `You are an AI coding tutor. A student is working on this problem:
 
 Title: ${problem.title}
@@ -111,7 +111,7 @@ Provide helpful, encouraging feedback. Point out what's wrong, suggest improveme
 
 async function getHint(problem, userProgress) {
   try {
-    const client = getOpenAIClient();
+    const client = getGroqClient();
     const prompt = `A student is stuck on this coding problem:
 
 Title: ${problem.title}

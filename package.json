@@ -33,7 +33,7 @@
     "monaco-editor": "latest",
     "mongoose": "latest",
     "next": "^14.2.5",
-    "openai": "latest",
+    "groq-sdk": "latest",
     "path": "latest",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
