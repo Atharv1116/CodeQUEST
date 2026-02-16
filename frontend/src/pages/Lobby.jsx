@@ -487,13 +487,13 @@ const Lobby = () => {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           className="glass p-8 rounded-lg text-center cursor-pointer hover:glow transition border-2 border-primary"
-          onClick={() => joinGame("battle-royale")}
+          onClick={() => navigate("/battle-royale-mode")}
         >
           <Zap className="text-primary mx-auto mb-4" size={60} />
           <h2 className="text-2xl font-bold mb-2">Battle Royale</h2>
           <p className="text-gray-400 mb-4">Last coder standing wins!</p>
           <button className="bg-primary text-dark-900 px-6 py-2 rounded-lg font-semibold hover:bg-cyan-400 transition">
-            Join Queue
+            Enter Battle
           </button>
         </motion.div>
       </div>
