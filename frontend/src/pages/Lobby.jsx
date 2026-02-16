@@ -29,8 +29,9 @@ const Lobby = () => {
     if (!socket) return
 
     socket.on("queued", (data) => {
-      setQueueStatus({ 
-        mode: data.mode, 
+      console.log('[Lobby] Received queued event:', data);
+      setQueueStatus({
+        mode: data.mode,
         size: data.queueSize,
         position: data.position,
         team: data.team,
@@ -42,6 +43,7 @@ const Lobby = () => {
     })
 
     socket.on("match-found", (data) => {
+      console.log('[Lobby] Received match-found:', data);
       console.debug("match_found", data)
       setSearching(false)
       setMatchOverlay({
@@ -137,16 +139,23 @@ const Lobby = () => {
   }
 
   const joinGame = (mode) => {
-    if (!socket) return
-    setSearching(true)
-    setQueueStatus({ mode, size: 0 })
+    if (!socket) {
+      console.error('[Lobby] No socket connection!');
+      return;
+    }
+    console.log(`[Lobby] Joining ${mode} queue`);
+    setSearching(true);
+    setQueueStatus({ mode, size: 0 });
 
     if (mode === "1v1") {
-      socket.emit("join-1v1")
+      socket.emit("join-1v1");
+      console.log('[Lobby] Emitted join-1v1');
     } else if (mode === "2v2") {
-      socket.emit("join-2v2")
+      socket.emit("join-2v2");
+      console.log('[Lobby] Emitted join-2v2');
     } else if (mode === "battle-royale") {
-      socket.emit("join-battle-royale")
+      socket.emit("join-battle-royale");
+      console.log('[Lobby] Emitted join-battle-royale');
     }
   }
 
@@ -269,13 +278,12 @@ const Lobby = () => {
               <p className="text-gray-300 text-lg font-semibold mb-2">{matchOverlay.questionTitle}</p>
               <div className="flex items-center justify-center gap-3">
                 <span
-                  className={`px-3 py-1 rounded-lg text-xs font-bold ${
-                    matchOverlay.questionDifficulty === "easy"
-                      ? "bg-success/20 text-success"
-                      : matchOverlay.questionDifficulty === "medium"
-                        ? "bg-yellow-500/20 text-yellow-400"
-                        : "bg-danger/20 text-danger"
-                  }`}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold ${matchOverlay.questionDifficulty === "easy"
+                    ? "bg-success/20 text-success"
+                    : matchOverlay.questionDifficulty === "medium"
+                      ? "bg-yellow-500/20 text-yellow-400"
+                      : "bg-danger/20 text-danger"
+                    }`}
                 >
                   {matchOverlay.questionDifficulty.toUpperCase()}
                 </span>
