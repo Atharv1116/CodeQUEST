@@ -7,7 +7,7 @@ const { generateUniqueRoomCode } = require('../utils/roomCodeGenerator');
 // Create new custom room
 router.post('/create', authenticateToken, async (req, res) => {
     try {
-        const { maxTeams = 10, maxPlayersPerTeam = 10, settings = {} } = req.body;
+        const { maxTeams = 10, maxPlayersPerTeam = 5, settings = {} } = req.body;
         const userId = req.userId;
 
         // Generate unique room code
@@ -30,12 +30,13 @@ router.post('/create', authenticateToken, async (req, res) => {
             settings: {
                 map: settings.map || 'default',
                 region: settings.region || 'auto',
-                minPlayersToStart: settings.minPlayersToStart || 10
+                difficulty: settings.difficulty || 'medium'
             }
         });
 
-        // Initialize teams and slots
+        // Initialize teams, slots, and administrators
         room.initializeTeams();
+        room.initializeAdministrators();
 
         await room.save();
 
@@ -131,6 +132,7 @@ router.get('/:roomId', authenticateToken, async (req, res) => {
                 roomStatus: room.roomStatus,
                 totalPlayers: room.totalPlayers,
                 teams: room.teams,
+                administrators: room.administrators,
                 settings: room.settings,
                 createdAt: room.createdAt,
                 expiresAt: room.expiresAt
@@ -191,13 +193,7 @@ router.post('/:roomId/start', authenticateToken, async (req, res) => {
             return res.status(400).json({ ok: false, error: 'Room has already started or ended' });
         }
 
-        if (!room.hasMinimumPlayers()) {
-            return res.status(400).json({
-                ok: false,
-                error: `Minimum ${room.settings.minPlayersToStart} players required. Currently: ${room.totalPlayers}`
-            });
-        }
-
+        // No minimum player requirement - host can start with any number
         room.roomStatus = 'started';
         room.startedAt = new Date();
         await room.save();
