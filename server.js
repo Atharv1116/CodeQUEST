@@ -280,6 +280,9 @@ io.on('connection', (socket) => {
       if (userId1) state.playerIds.push(userId1);
       if (userId2) state.playerIds.push(userId2);
 
+      console.log(`[Server] 1v1 Match created - Room: ${roomId}, Players: ${player1.id}, ${player2.id}`);
+      console.log(`[Server] Question: ${question.title}`);
+
       // Emit match-found to both players individually to ensure delivery
       player1.emit('match-found', {
         roomId,
@@ -294,6 +297,8 @@ io.on('connection', (socket) => {
         type: '1v1',
         question
       });
+
+      console.log(`[Server] Emitted match-found to both players`);
     } else {
       socket.emit('queued', { mode: '1v1', queueSize: queue1v1.length });
     }
@@ -628,6 +633,7 @@ io.on('connection', (socket) => {
 
   // Join room
   socket.on('join-room', (roomId) => {
+    console.log(`[Server] ${socket.id} joining room:`, roomId);
     socket.join(roomId);
     socket.to(roomId).emit('user-joined', socket.id);
 
@@ -635,9 +641,10 @@ io.on('connection', (socket) => {
     const question = roomQuestion.get(roomId);
     const state = roomState.get(roomId);
 
+    console.log(`[Server] Room ${roomId} - Question exists:`, !!question, 'State exists:', !!state);
+
     if (question && state) {
-      // Send match-found event with complete data structure
-      socket.emit('match-found', {
+      const matchData = {
         roomId,
         question,
         type: state.type || '1v1',
@@ -648,7 +655,11 @@ io.on('connection', (socket) => {
           state.teams?.red?.includes(socket.id) ? state.teams.red : [],
         opponents: state.teams?.blue?.includes(socket.id) ? state.teams.red :
           state.teams?.red?.includes(socket.id) ? state.teams.blue : []
-      });
+      };
+      console.log(`[Server] Sending match-found to ${socket.id} with question:`, question.title);
+      socket.emit('match-found', matchData);
+    } else {
+      console.error(`[Server] Cannot send match data - Question: ${!!question}, State: ${!!state}`);
     }
   });
 
@@ -1069,12 +1080,15 @@ io.on('connection', (socket) => {
     state.winner = winnerId;
     roomState.set(roomId, state);
 
-    io.to(roomId).emit('match-finished', {
+    const matchFinishedData = {
       roomId,
       winner: winnerId,
       winnerUserId,
       message: `✅ ${winnerId} solved it first!`
-    });
+    };
+
+    console.log(`[Server] Emitting match-finished to room ${roomId}:`, matchFinishedData);
+    io.to(roomId).emit('match-finished', matchFinishedData);
 
     socket.emit('evaluation-result', { ok: true, correct: true, details });
     socket.to(roomId).emit('opponent-solved', { solver: socketId, details });

@@ -107,11 +107,16 @@ const Battle = () => {
   useEffect(() => {
     if (!socket) return;
 
+    console.log('[Battle] Emitting join-room for:', roomId);
     socket.emit('join-room', roomId);
 
     socket.on('match-found', (data) => {
+      console.log('[Battle] Received match-found:', data);
       if (data.question) {
+        console.log('[Battle] Setting question:', data.question.title);
         setQuestion(data.question);
+      } else {
+        console.error('[Battle] No question in match-found data!');
       }
       // Handle 2v2 team information
       if (data.type === '2v2') {
@@ -175,6 +180,8 @@ const Battle = () => {
     });
 
     socket.on('match-finished', (data) => {
+      console.log('[Battle] Received match-finished:', data);
+      console.log('[Battle] My socket.id:', socket.id);
       setMatchFinished(true);
 
       // Determine if this user won or lost
@@ -183,18 +190,22 @@ const Battle = () => {
       if (data.winner) {
         // 1v1: check if winner socket ID matches ours
         didIWin = data.winner === socket.id;
+        console.log('[Battle] 1v1 - Winner:', data.winner, 'Did I win?', didIWin);
       } else if (data.winnerTeam) {
         // 2v2: check if our team won
         didIWin = data.winnerTeam === myTeam;
+        console.log('[Battle] 2v2 - Winner team:', data.winnerTeam, 'My team:', myTeam, 'Did I win?', didIWin);
       }
 
       // Set winner state and show appropriate modal
       setWinner(didIWin ? 'you' : 'opponent');
 
       if (didIWin) {
+        console.log('[Battle] Showing WON modal');
         setShowWonModal(true);
         setShowLostModal(false);
       } else {
+        console.log('[Battle] Showing LOST modal');
         setShowWonModal(false);
         setShowLostModal(true);
       }
