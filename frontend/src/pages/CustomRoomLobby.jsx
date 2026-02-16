@@ -45,13 +45,31 @@ const CustomRoomLobby = () => {
 
         // Socket event listeners
         socket.on('room-state-update', (data) => {
-            setRoom(prev => ({
-                ...prev,
-                teams: data.teams,
-                totalPlayers: data.totalPlayers,
-                hostId: data.hostId || prev.hostId
-            }));
-            findMySlot(data.teams);
+            setRoom(prev => {
+                if (!prev) {
+                    // If room hasn't loaded yet, create initial state from socket data
+                    return {
+                        roomId: data.roomId,
+                        roomCode: data.roomCode,
+                        teams: data.teams,
+                        totalPlayers: data.totalPlayers,
+                        hostId: data.hostId,
+                        roomStatus: data.roomStatus || 'waiting',
+                        maxTeams: data.maxTeams || 10,
+                        maxPlayersPerTeam: data.maxPlayersPerTeam || 10,
+                        settings: data.settings || { minPlayersToStart: 10 }
+                    };
+                }
+                return {
+                    ...prev,
+                    teams: data.teams,
+                    totalPlayers: data.totalPlayers,
+                    hostId: data.hostId || prev.hostId
+                };
+            });
+            if (data.teams) {
+                findMySlot(data.teams);
+            }
         });
 
         socket.on('player-joined', (data) => {
@@ -70,7 +88,7 @@ const CustomRoomLobby = () => {
             if (data.newHostId === user.id) {
                 alert(data.message);
             }
-            setRoom(prev => ({ ...prev, hostId: data.newHostId }));
+            setRoom(prev => prev ? { ...prev, hostId: data.newHostId } : null);
         });
 
         socket.on('match-starting', (data) => {
@@ -98,6 +116,10 @@ const CustomRoomLobby = () => {
     }, [socket, user, roomId, navigate]);
 
     const findMySlot = (teams) => {
+        if (!teams || !Array.isArray(teams)) {
+            setMySlot(null);
+            return;
+        }
         for (const team of teams) {
             for (const slot of team.slots) {
                 if (slot.playerId === user.id) {
@@ -307,8 +329,8 @@ const PlayerSlot = ({ slot, teamNumber, onClick, isMySlot, isHost, canClick }) =
                 onClick={onClick}
                 disabled={!canClick}
                 className={`w-full p-3 rounded-lg border-2 border-dashed transition-all ${canClick
-                        ? 'border-gray-600 hover:border-purple-500 hover:bg-purple-500/10 cursor-pointer'
-                        : 'border-gray-700 cursor-not-allowed opacity-50'
+                    ? 'border-gray-600 hover:border-purple-500 hover:bg-purple-500/10 cursor-pointer'
+                    : 'border-gray-700 cursor-not-allowed opacity-50'
                     }`}
             >
                 <div className="text-center text-gray-500 text-sm">
@@ -322,8 +344,8 @@ const PlayerSlot = ({ slot, teamNumber, onClick, isMySlot, isHost, canClick }) =
     return (
         <div
             className={`p-3 rounded-lg border-2 transition-all ${isMySlot
-                    ? 'border-purple-500 bg-purple-500/20'
-                    : 'border-gray-600 bg-gray-700/50'
+                ? 'border-purple-500 bg-purple-500/20'
+                : 'border-gray-600 bg-gray-700/50'
                 }`}
         >
             <div className="flex items-center gap-2">
