@@ -110,25 +110,31 @@ const Battle = () => {
     console.log('[Battle] Emitting join-room for:', roomId);
     socket.emit('join-room', roomId);
 
-    socket.on('match-found', (data) => {
+    const handleMatchFound = (data) => {
       console.log('[Battle] Received match-found:', data);
-      if (data.question) {
-        console.log('[Battle] Setting question:', data.question.title);
-        setQuestion(data.question);
-      } else {
-        console.error('[Battle] No question in match-found data!');
-      }
-      // Handle 2v2 team information
-      if (data.type === '2v2') {
-        setMatchType('2v2');
-        setMyTeam(data.team || null);
-        setTeammates(data.teammates || []);
-        setOpponents(data.opponents || []);
-        // Teammate names will be populated from chat/receive-message events
-      } else {
-        setMatchType('1v1');
-      }
-    });
+
+      // Use setTimeout to defer state updates and avoid setState during render
+      setTimeout(() => {
+        if (data.question) {
+          console.log('[Battle] Setting question:', data.question.title);
+          setQuestion(data.question);
+        } else {
+          console.error('[Battle] No question in match-found data!');
+        }
+
+        // Handle 2v2 team information
+        if (data.type === '2v2') {
+          setMatchType('2v2');
+          setMyTeam(data.team || null);
+          setTeammates(data.teammates || []);
+          setOpponents(data.opponents || []);
+        } else {
+          setMatchType('1v1');
+        }
+      }, 0);
+    };
+
+    socket.on('match-found', handleMatchFound);
 
     socket.on('receive-message', ({ user, socketId, message }) => {
       const isMe = socketId === socket.id;
