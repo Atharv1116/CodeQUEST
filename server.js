@@ -1539,12 +1539,7 @@ io.on('connection', (socket) => {
         return socket.emit('room-error', { error: 'Room has already started or ended' });
       }
 
-      if (!room.hasMinimumPlayers()) {
-        return socket.emit('room-error', {
-          error: `Minimum ${room.settings.minPlayersToStart} players required. Currently: ${room.totalPlayers}`
-        });
-      }
-
+      // No minimum player requirement - host can start with any number of players
       room.roomStatus = 'started';
       room.startedAt = new Date();
       await room.save();
@@ -1595,6 +1590,116 @@ io.on('connection', (socket) => {
       }, 3000);
     } catch (error) {
       console.error('[CustomRoom] Error starting match:', error);
+      socket.emit('room-error', { error: error.message });
+    }
+  });
+
+  // Join as administrator
+  socket.on('join-as-admin', async ({ roomId, userId }) => {
+    try {
+      const room = await CustomRoom.findOne({ roomId });
+
+      if (!room) {
+        return socket.emit('room-error', { error: 'Room not found' });
+      }
+
+      if (room.roomStatus !== 'waiting') {
+        return socket.emit('room-error', { error: 'Cannot join as admin after match started' });
+      }
+
+      // Find available admin slot
+      const availableSlot = room.findAvailableAdminSlot();
+      if (!availableSlot) {
+        return socket.emit('room-error', { error: 'All administrator slots are full' });
+      }
+
+      // Get user info
+      const user = await User.findById(userId);
+      if (!user) {
+        return socket.emit('room-error', { error: 'User not found' });
+      }
+
+      // Assign to admin slot
+      const success = room.assignAdministrator(availableSlot, userId, socket.id, user.username);
+      if (!success) {
+        return socket.emit('room-error', { error: 'Failed to assign administrator slot' });
+      }
+
+      await room.save();
+
+      // Join socket room
+      socket.join(roomId);
+
+      console.log(`[CustomRoom] User ${user.username} joined as admin in room ${room.roomCode}`);
+
+      // Broadcast updated room state
+      io.to(roomId).emit('room-state-update', {
+        roomId: room.roomId,
+        roomCode: room.roomCode,
+        teams: room.teams,
+        administrators: room.administrators,
+        totalPlayers: room.totalPlayers,
+        hostId: room.hostId,
+        roomStatus: room.roomStatus,
+        settings: room.settings
+      });
+
+      socket.emit('admin-joined', {
+        ok: true,
+        slotNumber: availableSlot,
+        message: 'Joined as administrator'
+      });
+    } catch (error) {
+      console.error('[CustomRoom] Error joining as admin:', error);
+      socket.emit('room-error', { error: error.message });
+    }
+  });
+
+  // Update room settings (host only)
+  socket.on('update-room-settings', async ({ roomId, userId, settings }) => {
+    try {
+      const room = await CustomRoom.findOne({ roomId });
+
+      if (!room) {
+        return socket.emit('room-error', { error: 'Room not found' });
+      }
+
+      if (room.hostId.toString() !== userId.toString()) {
+        return socket.emit('room-error', { error: 'Only host can update settings' });
+      }
+
+      if (room.roomStatus !== 'waiting') {
+        return socket.emit('room-error', { error: 'Cannot update settings after match started' });
+      }
+
+      // Update settings
+      if (settings.difficulty && ['easy', 'medium', 'hard'].includes(settings.difficulty)) {
+        room.settings.difficulty = settings.difficulty;
+      }
+
+      await room.save();
+
+      console.log(`[CustomRoom] Room ${room.roomCode} settings updated:`, settings);
+
+      // Broadcast updated room state
+      io.to(roomId).emit('room-state-update', {
+        roomId: room.roomId,
+        roomCode: room.roomCode,
+        teams: room.teams,
+        administrators: room.administrators,
+        totalPlayers: room.totalPlayers,
+        hostId: room.hostId,
+        roomStatus: room.roomStatus,
+        settings: room.settings
+      });
+
+      socket.emit('settings-updated', {
+        ok: true,
+        settings: room.settings,
+        message: 'Settings updated successfully'
+      });
+    } catch (error) {
+      console.error('[CustomRoom] Error updating settings:', error);
       socket.emit('room-error', { error: error.message });
     }
   });
