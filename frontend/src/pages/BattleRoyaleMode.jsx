@@ -28,9 +28,9 @@ const BattleRoyaleMode = () => {
         socket.emit('create-custom-room', {
             userId: user.id,
             maxTeams: 10,
-            maxPlayersPerTeam: 10,
+            maxPlayersPerTeam: 5,
             settings: {
-                minPlayersToStart: 10
+                difficulty: 'medium'
             }
         });
 

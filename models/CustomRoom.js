@@ -1,39 +1,26 @@
 const mongoose = require('mongoose');
 
-const playerSlotSchema = new mongoose.Schema({
-    slotNumber: {
-        type: Number,
-        required: true,
-        min: 1,
-        max: 10
-    },
-    playerId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        default: null
-    },
-    socketId: {
-        type: String,
-        default: null
-    },
-    username: {
-        type: String,
-        default: null
-    },
-    isLocked: {
-        type: Boolean,
-        default: false
-    }
+// Player slot schema
+const slotSchema = new mongoose.Schema({
+    slotNumber: { type: Number, required: true },
+    playerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    socketId: { type: String, default: null },
+    username: { type: String, default: null },
+    isLocked: { type: Boolean, default: false }
 }, { _id: false });
 
+// Team schema
 const teamSchema = new mongoose.Schema({
-    teamNumber: {
-        type: Number,
-        required: true,
-        min: 1,
-        max: 10
-    },
-    slots: [playerSlotSchema]
+    teamNumber: { type: Number, required: true },
+    slots: [slotSchema]
+}, { _id: false });
+
+// Administrator slot schema
+const adminSlotSchema = new mongoose.Schema({
+    slotNumber: { type: Number, required: true },
+    adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    socketId: { type: String, default: null },
+    username: { type: String, default: null }
 }, { _id: false });
 
 const customRoomSchema = new mongoose.Schema({
@@ -69,10 +56,11 @@ const customRoomSchema = new mongoose.Schema({
     },
     maxPlayersPerTeam: {
         type: Number,
-        default: 10,
+        default: 5,
         min: 1,
         max: 10
     },
+    administrators: [adminSlotSchema],
     roomStatus: {
         type: String,
         enum: ['waiting', 'started', 'ended'],
@@ -89,10 +77,10 @@ const customRoomSchema = new mongoose.Schema({
             type: String,
             default: 'auto'
         },
-        minPlayersToStart: {
-            type: Number,
-            default: 10,
-            min: 2
+        difficulty: {
+            type: String,
+            enum: ['easy', 'medium', 'hard'],
+            default: 'medium'
         }
     },
     createdAt: {
@@ -219,9 +207,45 @@ customRoomSchema.methods.isFull = function () {
     return this.totalPlayers >= this.maxTeams * this.maxPlayersPerTeam;
 };
 
-// Check if minimum players met
-customRoomSchema.methods.hasMinimumPlayers = function () {
-    return this.totalPlayers >= this.settings.minPlayersToStart;
+// Initialize administrator slots
+customRoomSchema.methods.initializeAdministrators = function () {
+    this.administrators = [];
+    for (let i = 1; i <= 5; i++) {
+        this.administrators.push({
+            slotNumber: i,
+            adminId: null,
+            socketId: null,
+            username: null
+        });
+    }
+};
+
+// Assign administrator to slot
+customRoomSchema.methods.assignAdministrator = function (slotNumber, adminId, socketId, username) {
+    const slot = this.administrators.find(s => s.slotNumber === slotNumber);
+    if (!slot || slot.adminId) return false;
+
+    slot.adminId = adminId;
+    slot.socketId = socketId;
+    slot.username = username;
+    return true;
+};
+
+// Remove administrator
+customRoomSchema.methods.removeAdministrator = function (adminId) {
+    const slot = this.administrators.find(s => s.adminId && s.adminId.toString() === adminId.toString());
+    if (!slot) return null;
+
+    slot.adminId = null;
+    slot.socketId = null;
+    slot.username = null;
+    return slot.slotNumber;
+};
+
+// Find available admin slot
+customRoomSchema.methods.findAvailableAdminSlot = function () {
+    const slot = this.administrators.find(s => !s.adminId);
+    return slot ? slot.slotNumber : null;
 };
 
 // Ensure virtuals are included in JSON
