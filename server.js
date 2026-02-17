@@ -1522,6 +1522,85 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Create custom room
+  socket.on('create-custom-room', async ({ userId, maxTeams = 10, maxPlayersPerTeam = 5, settings = {} }) => {
+    try {
+      // Get user info
+      const user = await User.findById(userId);
+      if (!user) {
+        return socket.emit('room-error', { error: 'User not found' });
+      }
+
+      // Generate unique room code
+      const { generateUniqueRoomCode } = require('./utils/roomCodeGenerator');
+      const roomCode = await generateUniqueRoomCode(async (code) => {
+        const existing = await CustomRoom.findOne({ roomCode: code });
+        return !!existing;
+      });
+
+      // Generate unique room ID
+      const roomId = `custom_br_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+
+      // Create room
+      const room = new CustomRoom({
+        roomId,
+        roomCode,
+        hostId: userId,
+        hostSocketId: socket.id,
+        maxTeams,
+        maxPlayersPerTeam,
+        settings: {
+          map: settings.map || 'default',
+          region: settings.region || 'auto',
+          difficulty: settings.difficulty || 'medium'
+        }
+      });
+
+      // Initialize teams, slots, and administrators
+      room.initializeTeams();
+      room.initializeAdministrators();
+
+      // Auto-join host to first available slot (Team 1, Slot 1)
+      const firstSlot = room.findAvailableSlot();
+      if (firstSlot) {
+        room.assignPlayerToSlot(
+          firstSlot.teamNumber,
+          firstSlot.slotNumber,
+          userId,
+          socket.id,
+          user.username
+        );
+      }
+
+      await room.save();
+
+      // Join socket room
+      socket.join(roomId);
+
+      console.log(`[CustomRoom] Created room ${roomCode} (${roomId}) by user ${user.username} - Host auto-joined`);
+
+      // Emit room created event
+      socket.emit('room-created', {
+        ok: true,
+        room: {
+          roomId: room.roomId,
+          roomCode: room.roomCode,
+          hostId: room.hostId,
+          maxTeams: room.maxTeams,
+          maxPlayersPerTeam: room.maxPlayersPerTeam,
+          roomStatus: room.roomStatus,
+          teams: room.teams,
+          administrators: room.administrators,
+          totalPlayers: room.totalPlayers,
+          settings: room.settings
+        }
+      });
+    } catch (error) {
+      console.error('[CustomRoom] Error creating room:', error);
+      socket.emit('room-error', { error: error.message });
+    }
+  });
+
   // Start custom match
   socket.on('start-custom-match', async ({ roomId, userId }) => {
     try {
