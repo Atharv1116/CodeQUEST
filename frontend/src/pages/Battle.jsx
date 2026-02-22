@@ -197,6 +197,16 @@ const Battle = () => {
       setShowLostModal(true);
     };
 
+    // room-state: server sends this after join-room if a match is already in progress
+    // (handles reconnection recovery)
+    const handleRoomState = (data) => {
+      console.log('[Battle] room-state received:', data);
+      if (data.question && !question) setQuestion(data.question);
+      if (data.timerRemaining != null) setTimeLeft(data.timerRemaining);
+      if (data.editorLocked) setEditorLocked(true);
+      if (data.type) setMatchType(data.type);
+    };
+
     // rating-update: backfill real ratingChanges + matchId once DB pipeline completes
     const handleRatingUpdate = ({ matchId, ratingChanges }) => {
       console.log('[Battle] rating-update received, matchId:', matchId, 'changes:', ratingChanges);
@@ -211,6 +221,7 @@ const Battle = () => {
     socket.on('opponent-left-match', handleOpponentLeft);
     socket.on('you-left-match', handleYouLeft);
     socket.on('rating-update', handleRatingUpdate);
+    socket.on('room-state', handleRoomState);
 
     return () => {
       socket.off('match-found', handleMatchFound);
@@ -220,6 +231,7 @@ const Battle = () => {
       socket.off('opponent-left-match', handleOpponentLeft);
       socket.off('you-left-match', handleYouLeft);
       socket.off('rating-update', handleRatingUpdate);
+      socket.off('room-state', handleRoomState);
     };
     // Only re-run when socket itself changes — myTeam/matchType read via refs
   }, [socket, roomId]);

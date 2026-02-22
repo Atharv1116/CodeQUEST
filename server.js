@@ -36,8 +36,14 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: ['https://deployment-3yen98p15-atharvanikhade94-7076s-projects.vercel.app',
-      'https://deployment-iota-jet.vercel.app'],
+    origin: [
+      'https://deployment-3yen98p15-atharvanikhade94-7076s-projects.vercel.app',
+      'https://deployment-iota-jet.vercel.app',
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:3000',
+      'http://127.0.0.1:5173'
+    ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
@@ -47,8 +53,14 @@ const io = new Server(server, {
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: ['https://deployment-3yen98p15-atharvanikhade94-7076s-projects.vercel.app',
-    'https://deployment-iota-jet.vercel.app'],
+  origin: [
+    'https://deployment-3yen98p15-atharvanikhade94-7076s-projects.vercel.app',
+    'https://deployment-iota-jet.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173'
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -430,6 +442,32 @@ io.on('connection', (socket) => {
     io.to(payload.roomId).emit('player-left-match', payload);
   });
 
+
+  // -------- join-room: re-join socket to an existing match room --------
+  // Battle.jsx emits this on mount. Without this handler the socket is NOT in
+  // the Socket.IO room and io.to(roomId).emit() delivers to nobody.
+  socket.on('join-room', (roomId) => {
+    if (!roomId) return;
+    socket.join(roomId);
+    console.log(`[Server] Socket ${socket.id} joined room ${roomId}`);
+
+    // If there is active match state, send it so the client can recover
+    const state = roomState.get(roomId);
+    const question = roomQuestion.get(roomId);
+    if (state && question) {
+      const timerEndAt = state.timerEndAt || null;
+      const timerRemaining = timerEndAt
+        ? Math.max(0, Math.round((timerEndAt - Date.now()) / 1000))
+        : null;
+      socket.emit('room-state', {
+        roomId,
+        type: state.type,
+        question,
+        timerRemaining,
+        editorLocked: state.finished || false
+      });
+    }
+  });
 
   // ---------- 1v1 Matchmaking ----------
   socket.on('join-1v1', async () => {
