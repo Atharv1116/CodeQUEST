@@ -186,10 +186,67 @@ async function analyzePerformance(user, matchHistory) {
   }
 }
 
+/**
+ * Analyze a player's performance after a finished match.
+ * Gives coaching without revealing solutions.
+ */
+async function analyzePostMatch({ match, user }) {
+  try {
+    const client = getGroqClient();
+    const { question, submissionLog, userResult } = match;
+    const attempts = userResult?.attempts || 0;
+    const solved = userResult?.solved || false;
+    const solveTimeSec = userResult?.timeTaken ? Math.round(userResult.timeTaken / 1000) : null;
+    const tags = question?.tags?.join(', ') || 'general';
+    const diff = question?.difficulty || 'unknown';
+
+    const failureSummary = (submissionLog || [])
+      .filter(s => !s.correct).slice(0, 5)
+      .map(s => `Attempt ${s.attempt}: "${s.judgeStatus}"${s.stderr ? ` — ${s.stderr.slice(0, 100)}` : ''}`)
+      .join('\n') || 'No failed attempts recorded.';
+
+    const prompt = `You are CodeQuest AI Coach. The match has ENDED. Do NOT reveal solutions.
+
+Problem: "${question?.title || 'Unknown'}" (${diff}) — Topics: ${tags}
+Player: ${user?.username || 'Unknown'} | Rating: ${user?.rating ?? 'N/A'}
+Result: ${solved ? 'SOLVED ✅' : 'NOT SOLVED ❌'} | Attempts: ${attempts}${solveTimeSec ? ` | Solve time: ${solveTimeSec}s` : ''}
+
+Error Summary (no code):
+${failureSummary}
+
+Write a concise coaching report (3-5 bullets):
+1. Root cause of failures (algorithm, edge case type)
+2. Specific weak topics to study
+3. 1-2 practice problem suggestions
+4. One speed/accuracy tip
+Do NOT reveal the solution or correct code.`;
+
+    const response = await client.chat.completions.create({
+      model: DEFAULT_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 400,
+      temperature: 0.5
+    });
+
+    const text = response.choices[0]?.message?.content || 'No analysis available.';
+    const weakTopics = [...new Set([
+      ...(question?.tags || []),
+      ...(!solved ? ['Problem Solving'] : []),
+      ...(attempts > 2 ? ['Optimization'] : [])
+    ])].slice(0, 5);
+
+    return { analysis: text, solved, attempts, solveTimeSec, weakTopics, topicTags: question?.tags || [] };
+  } catch (error) {
+    console.error('Post-match analysis error:', error.message);
+    return { analysis: 'Unable to generate analysis. Review your code and check edge cases.', weakTopics: [], topicTags: [] };
+  }
+}
+
 module.exports = {
   getAIFeedback,
   getHint,
   recommendProblems,
   analyzePerformance,
-  chatWithTutor
+  chatWithTutor,
+  analyzePostMatch
 };

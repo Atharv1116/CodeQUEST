@@ -12,15 +12,53 @@ const matchSchema = new mongoose.Schema({
   question: { type: mongoose.Schema.Types.ObjectId, ref: 'Question' },
   winner: mongoose.Schema.Types.ObjectId,
   winnerTeam: String,
-  winners: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // For battle royale
+  winners: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+
+  // Per-player results
   results: [{
     player: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     solved: { type: Boolean, default: false },
-    timeTaken: Number, // milliseconds
+    timeTaken: Number,         // milliseconds from match start
     attempts: { type: Number, default: 0 },
-    score: { type: Number, default: 0 }
+    score: { type: Number, default: 0 },
+    hiddenTestsPassed: { type: Boolean, default: false },
+    accuracy: { type: Number, default: 0 }  // 0-100
   }],
+
+  // Rating changes recorded after match
+  ratingChanges: [{
+    player: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    ratingBefore: Number,
+    ratingAfter: Number,
+    delta: Number
+  }],
+
+  // Full submission log for AI analysis
+  submissionLog: [{
+    player: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    attempt: Number,
+    timestamp: Date,
+    correct: Boolean,
+    timeTakenMs: Number,
+    judgeStatus: String,
+    stderr: String,
+    stdout: String
+  }],
+
+  // Aggregate analytics
+  analytics: {
+    avgAttempts: Number,
+    fastestSolveMs: Number,
+    totalSubmissions: Number,
+    topicTags: [String]
+  },
+
+  // Timer metadata (set by server)
+  timerDurationSeconds: Number,
+  timerEndAt: Date,
+
   status: { type: String, enum: ['waiting', 'active', 'finished', 'cancelled'], default: 'waiting' },
+  endReason: { type: String, enum: ['solved', 'timeout', 'forfeit', 'disconnect', 'draw'], default: 'solved' },
   startedAt: Date,
   finishedAt: Date,
   timestamp: { type: Date, default: Date.now }

@@ -22,9 +22,9 @@ const CustomRoom = require('./models/CustomRoom');
 
 // Utils & Services
 const { submitToJudge0, LANGUAGE_IDS } = require('./config/judge0');
-const { calculateElo, calculateTeamElo } = require('./utils/elo');
+const { run1v1Pipeline, run2v2Pipeline, runBattleRoyalePipeline } = require('./utils/ratingPipeline');
 const { calculateXP, calculateCoins, checkBadges } = require('./utils/gamification');
-const { getAIFeedback, getHint, recommendProblems } = require('./services/aiTutor');
+const { getAIFeedback, getHint, recommendProblems, analyzePostMatch } = require('./services/aiTutor');
 
 // Routes
 const authRoutes = require('./routes/auth');
@@ -85,24 +85,87 @@ app.get('/api/match/:roomId/question', authenticateToken, async (req, res) => {
   const { roomId } = req.params;
 
   try {
-    // First check if question is in memory (active match)
     const question = roomQuestion.get(roomId);
-    if (question) {
-      console.log(`[API] Question recovered from memory for room: ${roomId}`);
-      return res.json({ ok: true, question });
-    }
+    if (question) return res.json({ ok: true, question });
 
-    // If not in memory, check database for completed match
     const match = await Match.findOne({ roomId }).populate('question');
-    if (match && match.question) {
-      console.log(`[API] Question recovered from database for room: ${roomId}`);
-      return res.json({ ok: true, question: match.question });
-    }
+    if (match && match.question) return res.json({ ok: true, question: match.question });
 
-    console.error(`[API] Question not found for room: ${roomId}`);
     res.status(404).json({ ok: false, error: 'Question not found for this match' });
   } catch (error) {
-    console.error(`[API] Error recovering question:`, error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Match state recovery for reconnecting players
+app.get('/api/match/:roomId/state', authenticateToken, async (req, res) => {
+  const { roomId } = req.params;
+  const userId = req.userId;
+
+  try {
+    const state = roomState.get(roomId);
+    const question = roomQuestion.get(roomId);
+
+    if (!state) {
+      // Match is finished — return basic info from DB
+      const match = await Match.findOne({ roomId }).populate('question');
+      if (!match) return res.status(404).json({ ok: false, error: 'Match not found' });
+      return res.json({
+        ok: true, status: 'finished',
+        type: match.type, question: match.question,
+        timerRemaining: 0, editorLocked: true
+      });
+    }
+
+    const timerRemaining = state.timerEndAt
+      ? Math.max(0, Math.ceil((state.timerEndAt - Date.now()) / 1000))
+      : (state.timerDuration || MATCH_TIME_LIMIT_SECONDS);
+
+    const socketId = (await User.findById(userId, 'socketId').lean())?.socketId;
+    const myAttempts = state.playerAttempts?.[socketId] || 0;
+
+    res.json({
+      ok: true, status: state.finished ? 'finished' : 'active',
+      type: state.type, question,
+      timerRemaining,
+      timerDuration: state.timerDuration || MATCH_TIME_LIMIT_SECONDS,
+      players: state.players,
+      playerIds: state.playerIds,
+      myAttempts,
+      editorLocked: !!state.finished
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Post-match AI analysis endpoint
+app.get('/api/match/:matchId/ai-analysis', authenticateToken, async (req, res) => {
+  const { matchId } = req.params;
+  const userId = req.userId;
+
+  try {
+    const match = await Match.findById(matchId).populate('question');
+    if (!match) return res.status(404).json({ ok: false, error: 'Match not found' });
+    if (match.status !== 'finished') return res.status(400).json({ ok: false, error: 'Match not finished yet' });
+
+    const user = await User.findById(userId).lean();
+    const userResult = match.results?.find(r => r.player?.toString() === userId);
+
+    const analysis = await analyzePostMatch({
+      match: {
+        type: match.type,
+        question: match.question,
+        submissionLog: match.submissionLog,
+        analytics: match.analytics,
+        userResult
+      },
+      user
+    });
+
+    res.json({ ok: true, analysis });
+  } catch (error) {
+    console.error('[AI Analysis] Error:', error.message);
     res.status(500).json({ ok: false, error: error.message });
   }
 });
@@ -129,12 +192,102 @@ let queueBattleRoyale = [];
 const roomQuestion = new Map();
 const roomState = new Map();
 const playerSessions = new Map(); // socketId -> userId
+const submissionLocks = new Set(); // socketId — locked while Judge0 evaluates
 
-// Battle Royale configuration
-const BATTLE_ROYALE_MIN_PLAYERS = 4;
-const BATTLE_ROYALE_MAX_PLAYERS = 12;
-const BATTLE_ROYALE_ROUND_TIME = 300000; // 5 minutes per round
-const BATTLE_ROYALE_ELIMINATION_RATE = 0.3; // Eliminate 30% each round
+// Server-authoritative timer config
+const MATCH_TIME_LIMIT_SECONDS = 1800; // 30 min for 1v1/2v2
+const BATTLE_ROYALE_ROUND_SECONDS = 300;  // 5 min per round
+
+// ---------- Server-Side Timer Authority ----------
+function startMatchTimer(roomId, durationSeconds) {
+  const state = roomState.get(roomId);
+  if (!state) return;
+
+  state.timerEndAt = Date.now() + durationSeconds * 1000;
+  state.timerDuration = durationSeconds;
+  state.timerInterval = setInterval(async () => {
+    const s = roomState.get(roomId);
+    if (!s || s.finished) {
+      clearInterval(s?.timerInterval);
+      return;
+    }
+    const remaining = Math.max(0, Math.ceil((s.timerEndAt - Date.now()) / 1000));
+    io.to(roomId).emit('timer-tick', { remaining, roomId });
+
+    if (remaining <= 0) {
+      clearInterval(s.timerInterval);
+      await handleTimerExpiry(roomId);
+    }
+  }, 1000);
+  roomState.set(roomId, state);
+}
+
+function stopMatchTimer(roomId) {
+  const state = roomState.get(roomId);
+  if (state?.timerInterval) {
+    clearInterval(state.timerInterval);
+    state.timerInterval = null;
+  }
+}
+
+async function handleTimerExpiry(roomId) {
+  const state = roomState.get(roomId);
+  if (!state || state.finished) return;
+
+  console.log(`[Timer] Match timed out: ${roomId}`);
+  state.finished = true;
+  roomState.set(roomId, state);
+
+  io.to(roomId).emit('match-locked', { roomId, reason: 'timeout' });
+
+  const question = roomQuestion.get(roomId);
+  const matchDurationMs = (state.timerDuration || MATCH_TIME_LIMIT_SECONDS) * 1000;
+
+  if (state.type === '1v1') {
+    // Determine if anyone solved — if not, draw
+    const hasSolver = state.submittedPlayers && state.submittedPlayers.length > 0;
+    if (!hasSolver) {
+      // Draw
+      const [uid1, uid2] = state.playerIds;
+      let ratingChanges = [];
+      try {
+        const savedMatch = await Match.create({
+          roomId, type: '1v1', players: state.playerIds,
+          question: question?._id, status: 'finished', endReason: 'timeout',
+          startedAt: state.startedAt, finishedAt: new Date(),
+          timerDurationSeconds: state.timerDuration
+        });
+        ratingChanges = await run1v1Pipeline({
+          matchId: savedMatch._id, winnerUserId: uid1, loserUserId: uid2,
+          isDraw: true, winnerAttempts: 0, loserAttempts: 0,
+          matchDurationMs, question
+        });
+      } catch (e) { console.error('[Timer] Draw pipeline error:', e.message); }
+
+      io.to(roomId).emit('match-finished', {
+        roomId, draw: true, reason: 'timeout',
+        message: "⏰ Time's up! It's a draw.",
+        ratingChanges
+      });
+    } else {
+      // Someone already won via submit — nothing more to do
+      console.log(`[Timer] ${roomId} already resolved by submission.`);
+    }
+  } else if (state.type === '2v2') {
+    // Draw for team matches on timeout
+    io.to(roomId).emit('match-finished', {
+      roomId, draw: true, reason: 'timeout',
+      message: "⏰ Time's up! Match ended in a draw.",
+      ratingChanges: []
+    });
+  } else if (state.type === 'battle-royale') {
+    // End current round
+    await endBattleRoyaleRound(roomId, state.round || 1, true);
+  }
+
+  roomState.delete(roomId);
+  roomQuestion.delete(roomId);
+}
 
 // Helper: Get random question
 async function getRandomQuestion(difficulty = null) {
@@ -312,22 +465,20 @@ io.on('connection', (socket) => {
       console.log(`[Server] 1v1 Match created - Room: ${roomId}, Players: ${player1.id}, ${player2.id}`);
       console.log(`[Server] Question: ${question.title}`);
 
-      // Emit match-found to both players individually to ensure delivery
-      player1.emit('match-found', {
+      // Emit match-found to both players
+      const matchPayload = {
         roomId,
         players: [player1.id, player2.id],
         type: '1v1',
-        question
-      });
+        question,
+        timerDuration: MATCH_TIME_LIMIT_SECONDS
+      };
+      player1.emit('match-found', matchPayload);
+      player2.emit('match-found', matchPayload);
 
-      player2.emit('match-found', {
-        roomId,
-        players: [player1.id, player2.id],
-        type: '1v1',
-        question
-      });
-
-      console.log(`[Server] Emitted match-found to both players`);
+      // Start server-authoritative timer AFTER emitting match-found
+      startMatchTimer(roomId, MATCH_TIME_LIMIT_SECONDS);
+      console.log(`[Server] Timer started for room ${roomId} (${MATCH_TIME_LIMIT_SECONDS}s)`);
     } else {
       socket.emit('queued', { mode: '1v1', queueSize: queue1v1.length });
     }
@@ -431,9 +582,14 @@ io.on('connection', (socket) => {
           team,
           teammates,
           opponents,
-          question
+          question,
+          timerDuration: MATCH_TIME_LIMIT_SECONDS
         });
       });
+
+      // Start server-authoritative timer
+      startMatchTimer(roomId, MATCH_TIME_LIMIT_SECONDS);
+      console.log(`[Server] Timer started for 2v2 room ${roomId} (${MATCH_TIME_LIMIT_SECONDS}s)`);
     }
   });
 
@@ -481,11 +637,12 @@ io.on('connection', (socket) => {
         players: state.players,
         question,
         round: 1,
-        totalRounds: 3
+        totalRounds: 3,
+        timerDuration: BATTLE_ROYALE_ROUND_SECONDS
       });
 
-      // Start round timer
-      startBattleRoyaleRound(roomId, 1);
+      // Start first round timer
+      startMatchTimer(roomId, BATTLE_ROYALE_ROUND_SECONDS);
     } else {
       socket.emit('queued', { mode: 'battle-royale', queueSize: queueBattleRoyale.length });
     }
@@ -923,7 +1080,9 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Code submission
+  // -------- SUBMISSION ENGINE — Server Authority --------
+  // Run: unlimited attempts on sample test cases, no state change
+  // Submit: hidden test cases, submission locking, atomic win check
   socket.on('submit-code', async ({ roomId, code, language_id, inputOverride, isSubmit = true }) => {
     try {
       const state = roomState.get(roomId);
@@ -934,307 +1093,467 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // Check if match is already finished
+      // --- GATE 1: match already finished ---
       if (state.finished) {
-        socket.emit('evaluation-result', { ok: false, message: 'Match already finished' });
+        socket.emit('evaluation-result', { ok: false, message: 'Match has already ended' });
         return;
       }
 
-      // Check if this player already submitted (only for Submit, not Run)
-      if (isSubmit && state.submittedPlayers && state.submittedPlayers.includes(socket.id)) {
-        socket.emit('evaluation-result', { ok: false, message: 'You have already submitted your solution' });
+      // --- GATE 2: timer expired (late submission) ---
+      if (isSubmit && state.timerEndAt && Date.now() > state.timerEndAt) {
+        socket.emit('evaluation-result', { ok: false, message: 'Submission rejected — time limit exceeded' });
         return;
       }
 
-      socket.emit('evaluation-started', { message: 'Evaluating...' });
+      // --- RUN (not Submit): use sample I/O, no locks, no state change ---
+      if (!isSubmit) {
+        socket.emit('evaluation-started', { message: 'Running on sample tests...' });
+        const judgeRes = await submitToJudge0({
+          source_code: code,
+          language_id,
+          stdin: inputOverride !== undefined ? String(inputOverride) : (question.sampleInput || ''),
+          expected_output: question.sampleOutput || ''
+        });
+        const stdout = (judgeRes.stdout || '').trim();
+        const correct = stdout === (question.sampleOutput || '').trim();
+        const details = {
+          status: judgeRes.status?.description,
+          stdout, stderr: judgeRes.stderr,
+          compile_output: judgeRes.compile_output,
+          time: judgeRes.time, memory: judgeRes.memory, correct
+        };
+        socket.emit('evaluation-result', { ok: true, correct, details, isRun: true });
+        if (!correct) {
+          const userId = playerSessions.get(socket.id);
+          if (userId) {
+            const errorMsg = judgeRes.stderr || judgeRes.compile_output || 'Wrong output';
+            const feedback = await getAIFeedback(code, question, errorMsg, 0);
+            socket.emit('ai-feedback', { feedback });
+          }
+        }
+        return;
+      }
 
-      const judgeRes = await submitToJudge0({
-        source_code: code,
-        language_id,
-        stdin: inputOverride !== undefined ? String(inputOverride) : (question.sampleInput || ''),
-        expected_output: question.sampleOutput || ''
-      });
+      // --- GATE 3: per-player submission lock (prevent double-submit spam) ---
+      if (submissionLocks.has(socket.id)) {
+        socket.emit('evaluation-result', { ok: false, message: 'Evaluation already in progress — please wait' });
+        return;
+      }
+
+      // Record precise server-side timestamp
+      const submitTimestamp = Date.now();
+      const submitTimeMs = submitTimestamp - (state.startedAt?.getTime?.() || submitTimestamp);
+
+      // Initialize per-player attempt tracking
+      if (!state.playerAttempts) state.playerAttempts = {};
+      if (!state.playerAttempts[socket.id]) state.playerAttempts[socket.id] = 0;
+
+      // --- LOCK ---
+      submissionLocks.add(socket.id);
+      socket.emit('evaluation-started', { message: 'Evaluating on hidden tests...' });
+
+      let judgeRes;
+      try {
+        // Use hidden test cases if available, otherwise fall back to sample I/O
+        const hiddenTests = question.testCases?.filter(tc => tc.isHidden);
+        const useHidden = hiddenTests && hiddenTests.length > 0;
+        const stdin = useHidden ? hiddenTests[0].input : (question.sampleInput || '');
+        const expected = useHidden ? hiddenTests[0].output : (question.sampleOutput || '');
+
+        judgeRes = await submitToJudge0({
+          source_code: code,
+          language_id,
+          stdin,
+          expected_output: expected
+        });
+      } finally {
+        // Always unlock, even if Judge0 throws
+        submissionLocks.delete(socket.id);
+      }
 
       const stdout = (judgeRes.stdout || '').trim();
       const expected = (question.sampleOutput || '').trim();
-      const correct = stdout === expected;
+      const correct = judgeRes.correct === true || stdout === expected;
 
       const details = {
-        status: judgeRes.status ? judgeRes.status.description : undefined,
-        stdout,
-        stderr: judgeRes.stderr,
+        status: judgeRes.status?.description,
+        stdout, stderr: judgeRes.stderr,
         compile_output: judgeRes.compile_output,
-        time: judgeRes.time,
-        memory: judgeRes.memory,
-        correct
+        time: judgeRes.time, memory: judgeRes.memory, correct
       };
 
-      // If this is just a Run (not Submit), return results without updating match state
-      if (!isSubmit) {
-        socket.emit('evaluation-result', { ok: true, correct, details, isRun: true });
-        if (!correct) {
-          // Provide AI feedback for wrong answers even on Run
-          const userId = playerSessions.get(socket.id);
-          if (userId) {
-            const user = await User.findById(userId);
-            if (user) {
-              const errorMsg = judgeRes.stderr || judgeRes.compile_output || 'Wrong output';
-              const feedback = await getAIFeedback(code, question, errorMsg, 0);
-              socket.emit('ai-feedback', { feedback });
-            }
-          }
+      // Log this attempt
+      state.playerAttempts[socket.id] += 1;
+      const attemptNum = state.playerAttempts[socket.id];
+
+      // Record to submissionLog
+      if (!state.submissionLog) state.submissionLog = [];
+      const userId = playerSessions.get(socket.id);
+      state.submissionLog.push({
+        socketId: socket.id, userId, attempt: attemptNum,
+        timestamp: new Date(submitTimestamp), correct,
+        timeTakenMs: submitTimeMs,
+        judgeStatus: judgeRes.status?.description,
+        stderr: judgeRes.stderr, stdout
+      });
+
+      if (!correct) {
+        // Wrong answer — feedback only
+        socket.emit('evaluation-result', { ok: true, correct: false, details, attempt: attemptNum });
+        io.to(roomId).emit('score-update', { user: socket.id, message: '❌ Wrong Answer' });
+
+        // AI feedback
+        if (userId) {
+          const errorMsg = judgeRes.stderr || judgeRes.compile_output || 'Wrong output';
+          const feedback = await getAIFeedback(code, question, errorMsg, attemptNum);
+          socket.emit('ai-feedback', { feedback });
+        }
+
+        // Battle Royale: track attempt for scoring
+        if (state.type === 'battle-royale' && state.scores?.has(socket.id)) {
+          const sc = state.scores.get(socket.id);
+          sc.attempts = (sc.attempts || 0) + 1;
+          state.scores.set(socket.id, sc);
         }
         return;
       }
 
-      // This is a Submit - process win/loss logic
-      if (correct) {
-        const submitTime = Date.now() - (state.startedAt?.getTime() || Date.now());
-
-        if (state.type === '1v1') {
-          await handle1v1Win(roomId, socket.id, state, question, details, submitTime);
-        } else if (state.type === '2v2') {
-          await handle2v2Win(roomId, socket.id, state, question, details, submitTime);
-        } else if (state.type === 'battle-royale') {
-          await handleBattleRoyaleSolve(roomId, socket.id, state, submitTime);
-        }
-      } else {
-        // Wrong answer on Submit - provide AI feedback
-        const userId = playerSessions.get(socket.id);
-        if (userId) {
-          const user = await User.findById(userId);
-          if (user) {
-            const errorMsg = judgeRes.stderr || judgeRes.compile_output || 'Wrong output';
-            const feedback = await getAIFeedback(code, question, errorMsg,
-              state.scores?.get(socket.id)?.attempts || 0);
-
-            socket.emit('ai-feedback', { feedback });
-
-            // Update attempt count for battle royale
-            if (state.type === 'battle-royale' && state.scores.has(socket.id)) {
-              const score = state.scores.get(socket.id);
-              score.attempts += 1;
-              state.scores.set(socket.id, score);
-            }
-          }
-        }
-
-        socket.emit('evaluation-result', { ok: true, correct: false, details });
-        io.to(roomId).emit('score-update', {
-          user: socket.id,
-          message: '❌ Wrong Output'
+      // ===== CORRECT SUBMISSION =====
+      // --- GATE 4 (re-check after async Judge0) — atomic mutex ---
+      // JS is single-threaded: if another submission already set finished=true,
+      // this synchronous check catches it with no race condition.
+      if (state.finished) {
+        socket.emit('evaluation-result', {
+          ok: true, correct: true, details,
+          message: 'Correct! But match was already decided.'
         });
+        return;
       }
+
+      // Immediately mark finished to prevent any simultaneous win
+      state.finished = true;
+      roomState.set(roomId, state);
+
+      // Stop timer
+      stopMatchTimer(roomId);
+
+      // Broadcast match-locked to freeze ALL editors immediately
+      io.to(roomId).emit('match-locked', { roomId, winnerId: socket.id });
+
+      socket.emit('evaluation-result', { ok: true, correct: true, details, attempt: attemptNum });
+
+      const matchDurationMs = (state.timerDuration || MATCH_TIME_LIMIT_SECONDS) * 1000;
+
+      if (state.type === '1v1') {
+        await handle1v1Win(roomId, socket.id, state, question, details, submitTimeMs, matchDurationMs);
+      } else if (state.type === '2v2') {
+        await handle2v2Win(roomId, socket.id, state, question, details, submitTimeMs, matchDurationMs);
+      } else if (state.type === 'battle-royale') {
+        await handleBattleRoyaleSolve(roomId, socket.id, state, submitTimeMs);
+      }
+
     } catch (err) {
+      submissionLocks.delete(socket.id); // safety unlock
       console.error('submit-code error', err);
       socket.emit('evaluation-result', { ok: false, message: 'Server evaluation failed' });
     }
   });
 
-  async function handle1v1Win(roomId, socketId, state, question, details, submitTime) {
-    // Prevent duplicate wins if match already finished
-    if (state.finished) {
-      return;
-    }
-
+  async function handle1v1Win(roomId, socketId, state, question, details, submitTimeMs, matchDurationMs) {
+    // state.finished already set by caller — just finalise
     const winnerId = socketId;
     const opponentId = state.players.find(id => id !== winnerId);
     const winnerUserId = playerSessions.get(winnerId);
     const opponentUserId = playerSessions.get(opponentId);
 
-    if (!winnerUserId || !opponentUserId) {
-      socket.emit('evaluation-result', { ok: true, correct: true, details });
-      return;
+    const winnerAttempts = (state.playerAttempts?.[winnerId] || 1) - 1; // subtract the winning attempt
+    const loserAttempts = state.playerAttempts?.[opponentId] || 0;
+
+    let ratingChanges = [];
+    let savedMatch;
+
+    try {
+      // Build submission log for DB
+      const submissionLog = (state.submissionLog || []).map(s => ({
+        player: s.userId,
+        attempt: s.attempt,
+        timestamp: s.timestamp,
+        correct: s.correct,
+        timeTakenMs: s.timeTakenMs,
+        judgeStatus: s.judgeStatus,
+        stderr: s.stderr,
+        stdout: s.stdout
+      }));
+
+      savedMatch = await Match.create({
+        roomId, type: '1v1',
+        players: [winnerUserId, opponentUserId].filter(Boolean),
+        playerSocketIds: [winnerId, opponentId],
+        question: question?._id,
+        winner: winnerUserId,
+        results: [
+          { player: winnerUserId, solved: true, timeTaken: submitTimeMs, attempts: winnerAttempts + 1, score: 100, hiddenTestsPassed: true, accuracy: 100 },
+          { player: opponentUserId, solved: false, timeTaken: null, attempts: loserAttempts, score: 0, hiddenTestsPassed: false, accuracy: 0 }
+        ],
+        submissionLog,
+        analytics: {
+          avgAttempts: ((winnerAttempts + 1) + loserAttempts) / 2,
+          fastestSolveMs: submitTimeMs,
+          totalSubmissions: submissionLog.length,
+          topicTags: question?.tags || []
+        },
+        timerDurationSeconds: state.timerDuration || MATCH_TIME_LIMIT_SECONDS,
+        status: 'finished', endReason: 'solved',
+        startedAt: state.startedAt, finishedAt: new Date()
+      });
+
+      ratingChanges = await run1v1Pipeline({
+        matchId: savedMatch._id,
+        winnerUserId,
+        loserUserId: opponentUserId,
+        isDraw: false,
+        winnerSolveMs: submitTimeMs,
+        winnerAttempts: winnerAttempts,
+        loserAttempts: loserAttempts,
+        matchDurationMs,
+        question
+      });
+    } catch (err) {
+      console.error('[1v1Win] Pipeline error:', err.message);
     }
-
-    // Mark this player as submitted
-    if (!state.submittedPlayers) state.submittedPlayers = [];
-    state.submittedPlayers.push(socketId);
-
-    const winner = await User.findById(winnerUserId);
-    const loser = await User.findById(opponentUserId);
-
-    const [newWinnerRating, newLoserRating] = calculateElo(winner.rating, loser.rating);
-
-    // Calculate performance-based rating adjustment
-    const submitTimeSeconds = submitTime / 1000;
-    let performanceBonus = 0;
-
-    if (submitTimeSeconds < 120) { // < 2 minutes
-      performanceBonus = 5;
-    } else if (submitTimeSeconds < 300) { // < 5 minutes
-      performanceBonus = 3;
-    } else if (submitTimeSeconds > 900) { // > 15 minutes
-      performanceBonus = -2;
-    }
-
-    // Update winner
-    winner.rating = newWinnerRating + performanceBonus;
-    winner.wins += 1;
-    winner.matches += 1;
-    winner.xp += calculateXP('win', question.difficulty, '1v1');
-    winner.coins += calculateCoins('win', question.difficulty, '1v1');
-    winner.streak += 1;
-    winner.longestStreak = Math.max(winner.longestStreak, winner.streak);
-    winner.lastPlayDate = new Date();
-    await checkBadges(winner, require('./models/Badge'));
-    await winner.save();
-
-    // Update loser
-    loser.rating = newLoserRating;
-    loser.losses += 1;
-    loser.matches += 1;
-    loser.xp += calculateXP('loss', question.difficulty, '1v1');
-    loser.streak = 0;
-    await loser.save();
-
-    // Save match
-    await Match.create({
-      roomId,
-      type: '1v1',
-      players: [winnerUserId, opponentUserId],
-      playerSocketIds: [winnerId, opponentId],
-      question: question._id,
-      winner: winnerUserId,
-      results: [
-        { player: winnerUserId, solved: true, timeTaken: submitTime, score: 100 },
-        { player: opponentUserId, solved: false, timeTaken: null, score: 0 }
-      ],
-      status: 'finished',
-      startedAt: state.startedAt,
-      finishedAt: new Date()
-    });
-
-    state.finished = true;
-    state.winner = winnerId;
-    roomState.set(roomId, state);
 
     const matchFinishedData = {
-      roomId,
+      roomId, type: '1v1',
       winner: winnerId,
       winnerUserId,
-      message: `✅ ${winnerId} solved it first!`
+      matchId: savedMatch?._id?.toString(),
+      draw: false,
+      ratingChanges,
+      stats: {
+        winner: { solveTimeMs: submitTimeMs, attempts: winnerAttempts + 1, accuracy: 100 },
+        loser: { solveTimeMs: null, attempts: loserAttempts, accuracy: 0 }
+      },
+      message: `✅ Correct submission! Winner decided.`
     };
 
-    console.log(`[Server] Emitting match-finished to room ${roomId}:`, matchFinishedData);
+    console.log(`[Server] Emitting match-finished for room ${roomId}`);
     io.to(roomId).emit('match-finished', matchFinishedData);
-
-    socket.emit('evaluation-result', { ok: true, correct: true, details });
     socket.to(roomId).emit('opponent-solved', { solver: socketId, details });
+
+    roomState.delete(roomId);
+    roomQuestion.delete(roomId);
   }
 
-  async function handle2v2Win(roomId, socketId, state, question, details, submitTime) {
-    // Prevent duplicate wins if match already finished
-    if (state.finished) {
-      return;
-    }
-
+  async function handle2v2Win(roomId, socketId, state, question, details, submitTimeMs, matchDurationMs) {
+    // state.finished already set by caller
     const teams = state.teams || {};
-    const isRed = teams.red && teams.red.includes(socketId);
+    const isRed = teams.red?.includes(socketId);
     const teamName = isRed ? 'red' : 'blue';
     const winningTeam = teams[teamName];
     const losingTeam = teams[teamName === 'red' ? 'blue' : 'red'];
     const winningTeamIds = state.teamIds[teamName];
     const losingTeamIds = state.teamIds[teamName === 'red' ? 'blue' : 'red'];
 
-    // Mark this player as submitted
-    if (!state.submittedPlayers) state.submittedPlayers = [];
-    state.submittedPlayers.push(socketId);
+    let ratingChanges = [];
+    let savedMatch;
 
-    state.finished = true;
-    state.winnerTeam = teamName;
-    roomState.set(roomId, state);
+    try {
+      savedMatch = await Match.create({
+        roomId, type: '2v2',
+        players: [...(winningTeamIds || []), ...(losingTeamIds || [])],
+        playerSocketIds: [...(winningTeam || []), ...(losingTeam || [])],
+        question: question?._id,
+        winnerTeam: teamName,
+        results: [
+          ...(winningTeamIds || []).map(id => ({ player: id, solved: true, score: 100, accuracy: 100 })),
+          ...(losingTeamIds || []).map(id => ({ player: id, solved: false, score: 0, accuracy: 0 }))
+        ],
+        timerDurationSeconds: state.timerDuration || MATCH_TIME_LIMIT_SECONDS,
+        status: 'finished', endReason: 'solved',
+        startedAt: state.startedAt, finishedAt: new Date()
+      });
 
-    // Get team ratings
-    const winners = await User.find({ _id: { $in: winningTeamIds } });
-    const losers = await User.find({ _id: { $in: losingTeamIds } });
-
-    const winnerRatings = winners.map(u => u.rating);
-    const loserRatings = losers.map(u => u.rating);
-
-    const { team1, team2 } = calculateTeamElo(winnerRatings, loserRatings, true);
-
-    // Calculate performance-based rating adjustment
-    const submitTimeSeconds = submitTime / 1000;
-    let performanceBonus = 0;
-
-    if (submitTimeSeconds < 120) { // < 2 minutes
-      performanceBonus = 5;
-    } else if (submitTimeSeconds < 300) { // < 5 minutes
-      performanceBonus = 3;
-    } else if (submitTimeSeconds > 900) { // > 15 minutes
-      performanceBonus = -2;
+      ratingChanges = await run2v2Pipeline({
+        matchId: savedMatch._id,
+        winningTeamIds,
+        losingTeamIds,
+        solveMs: submitTimeMs,
+        matchDurationMs,
+        question
+      });
+    } catch (err) {
+      console.error('[2v2Win] Pipeline error:', err.message);
     }
-
-    // Update winners
-    for (let i = 0; i < winners.length; i++) {
-      winners[i].rating = team1[i] + performanceBonus;
-      winners[i].wins += 1;
-      winners[i].matches += 1;
-      winners[i].xp += calculateXP('win', question.difficulty, '2v2');
-      winners[i].coins += calculateCoins('win', question.difficulty, '2v2');
-      winners[i].streak += 1;
-      await checkBadges(winners[i], require('./models/Badge'));
-      await winners[i].save();
-    }
-
-    // Update losers
-    for (let i = 0; i < losers.length; i++) {
-      losers[i].rating = team2[i];
-      losers[i].losses += 1;
-      losers[i].matches += 1;
-      losers[i].xp += calculateXP('loss', question.difficulty, '2v2');
-      losers[i].streak = 0;
-      await losers[i].save();
-    }
-
-    // Save match
-    await Match.create({
-      roomId,
-      type: '2v2',
-      players: [...winningTeamIds, ...losingTeamIds],
-      playerSocketIds: [...winningTeam, ...losingTeam],
-      question: question._id,
-      winnerTeam: teamName,
-      results: [
-        ...winningTeamIds.map(id => ({ player: id, solved: true, score: 100 })),
-        ...losingTeamIds.map(id => ({ player: id, solved: false, score: 0 }))
-      ],
-      status: 'finished',
-      startedAt: state.startedAt,
-      finishedAt: new Date()
-    });
 
     io.to(roomId).emit('match-finished', {
-      roomId,
+      roomId, type: '2v2',
       winnerTeam: teamName,
       winningPlayers: winningTeam,
+      matchId: savedMatch?._id?.toString(),
+      draw: false,
+      ratingChanges,
       message: `✅ Team ${teamName} wins!`
     });
 
-    socket.emit('evaluation-result', { ok: true, correct: true, details });
+    roomState.delete(roomId);
+    roomQuestion.delete(roomId);
   }
 
-  async function handleBattleRoyaleSolve(roomId, socketId, state, submitTime) {
-    if (!state.scores.has(socketId)) return;
+  async function handleBattleRoyaleSolve(roomId, socketId, state, submitTimeMs) {
+    if (!state.scores?.has(socketId)) return;
 
     const score = state.scores.get(socketId);
-    if (score.solved) return; // Already solved
+    if (score.solved) return; // Already solved (state.finished already set by caller)
 
     score.solved = true;
-    score.time = submitTime;
+    score.time = submitTimeMs;
+    score.solvedAt = Date.now();
     state.scores.set(socketId, score);
 
-    // Notify others
     io.to(roomId).emit('battle-royale-solve', {
       solver: socketId,
-      time: submitTime
+      time: submitTimeMs
     });
 
-    socket.emit('evaluation-result', { ok: true, correct: true, details: { solved: true } });
+    // Don't end the match immediately — all players in BR keep trying until timer expires
+    // Re-open the match so others can also solve (only 1v1/2v2 end instantly on first correct)
+    state.finished = false;
+    roomState.set(roomId, state);
   }
 
-  // ========== CUSTOM ROOM SOCKET HANDLERS ==========
+  // Battle Royale round management (timer-driven via startMatchTimer)
+  async function endBattleRoyaleRound(roomId, round, isTimeout = false) {
+    const state = roomState.get(roomId);
+    if (!state) return;
+
+    stopMatchTimer(roomId);
+    state.finished = true;
+    roomState.set(roomId, state);
+
+    const activePlayers = Array.from(state.scores.entries())
+      .filter(([id]) => !state.eliminated?.includes(id))
+      .sort((a, b) => {
+        if (a[1].solved !== b[1].solved) return b[1].solved - a[1].solved;
+        if (a[1].solved && b[1].solved) return (a[1].time || Infinity) - (b[1].time || Infinity);
+        return (b[1].attempts || 0) - (a[1].attempts || 0);
+      });
+
+    const eliminateCount = Math.max(1, Math.floor(activePlayers.length * 0.3));
+    const eliminated = activePlayers.slice(-eliminateCount).map(([id]) => id);
+    if (!state.eliminated) state.eliminated = [];
+    state.eliminated.push(...eliminated);
+    state.round = (state.round || 1) + 1;
+
+    io.to(roomId).emit('battle-royale-eliminations', {
+      eliminated, round,
+      remaining: activePlayers.length - eliminateCount
+    });
+
+    const remaining = activePlayers.length - eliminateCount;
+    if (remaining <= 1 || round >= 3 || isTimeout) {
+      await finishBattleRoyale(roomId);
+    } else {
+      // Next round
+      const nextQuestion = await getRandomQuestion('medium');
+      roomQuestion.set(roomId, nextQuestion);
+
+      state.scores.forEach((sc, id) => {
+        if (!state.eliminated.includes(id)) {
+          state.scores.set(id, { solved: false, time: null, attempts: sc.attempts || 0 });
+        }
+      });
+      state.finished = false;
+      roomState.set(roomId, state);
+
+      setTimeout(() => {
+        io.to(roomId).emit('battle-royale-round-start', {
+          round: state.round, question: nextQuestion,
+          timerDuration: BATTLE_ROYALE_ROUND_SECONDS
+        });
+        startMatchTimer(roomId, BATTLE_ROYALE_ROUND_SECONDS);
+      }, 5000);
+    }
+  }
+
+  async function finishBattleRoyale(roomId) {
+    const state = roomState.get(roomId);
+    if (!state) return;
+
+    const question = roomQuestion.get(roomId);
+    const matchDurationMs = BATTLE_ROYALE_ROUND_SECONDS * 1000;
+
+    // Build rankings
+    const sortedPlayers = Array.from(state.scores.entries())
+      .map(([socketId, sc]) => ({
+        socketId,
+        userId: state.playerIds[state.players.indexOf(socketId)],
+        solved: sc.solved,
+        solveTimeMs: sc.time || null,
+        wrongAttempts: sc.attempts || 0,
+        position: state.eliminated?.indexOf(socketId) !== -1
+          ? state.eliminated.indexOf(socketId) + 1
+          : (state.eliminated?.length || 0) + 1
+      }))
+      .sort((a, b) => {
+        if (a.solved !== b.solved) return b.solved - a.solved;
+        if (a.solved && b.solved) return (a.solveTimeMs || Infinity) - (b.solveTimeMs || Infinity);
+        return a.position - b.position;
+      })
+      .map((r, idx) => ({ ...r, position: idx + 1 }));
+
+    let ratingChanges = [];
+    let savedMatch;
+
+    try {
+      savedMatch = await Match.create({
+        roomId, type: 'battle-royale',
+        players: state.playerIds,
+        playerSocketIds: state.players,
+        question: question?._id,
+        winner: sortedPlayers[0]?.userId,
+        winners: sortedPlayers[0]?.userId ? [sortedPlayers[0].userId] : [],
+        results: sortedPlayers.map(r => ({
+          player: r.userId,
+          solved: r.solved,
+          timeTaken: r.solveTimeMs,
+          attempts: r.wrongAttempts,
+          score: r.solved ? Math.max(0, 1000 - (r.solveTimeMs || 0) / 100) : 0
+        })),
+        analytics: {
+          totalSubmissions: (state.submissionLog || []).length,
+          topicTags: question?.tags || []
+        },
+        status: 'finished', endReason: 'solved',
+        startedAt: state.startedAt, finishedAt: new Date()
+      });
+
+      ratingChanges = await runBattleRoyalePipeline({
+        matchId: savedMatch._id,
+        rankings: sortedPlayers,
+        matchDurationMs,
+        question
+      });
+    } catch (err) {
+      console.error('[BR] Pipeline error:', err.message);
+    }
+
+    io.to(roomId).emit('battle-royale-finished', {
+      winner: sortedPlayers[0]?.socketId,
+      winnerUserId: sortedPlayers[0]?.userId,
+      matchId: savedMatch?._id?.toString(),
+      rankings: sortedPlayers.map(r => ({
+        socketId: r.socketId,
+        position: r.position,
+        solved: r.solved,
+        time: r.solveTimeMs
+      })),
+      ratingChanges
+    });
+
+    roomState.delete(roomId);
+    roomQuestion.delete(roomId);
+  }
+
 
   // Create custom room
   socket.on('create-custom-room', async ({ maxTeams, maxPlayersPerTeam, settings, userId }) => {

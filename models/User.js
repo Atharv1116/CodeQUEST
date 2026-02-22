@@ -8,7 +8,13 @@ const userSchema = new mongoose.Schema({
   socketId: String,
 
   // Rating & Stats
-  rating: { type: Number, default: 1000 },
+  rating: { type: Number, default: 0 },
+  ratingHistory: [{
+    matchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Match' },
+    delta: Number,
+    ratingAfter: Number,
+    timestamp: { type: Date, default: Date.now }
+  }],
   wins: { type: Number, default: 0 },
   losses: { type: Number, default: 0 },
   draws: { type: Number, default: 0 },

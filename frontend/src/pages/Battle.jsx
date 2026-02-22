@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import Editor from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Trophy, Lightbulb, Clock } from 'lucide-react';
+import { Send, Trophy, Lightbulb, Clock, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import axios from 'axios';
 
 const LANGUAGE_CONFIG = {
@@ -44,11 +44,8 @@ public class Solution {
   },
 };
 
-const DIFFICULTY_TIMERS = {
-  easy: 10 * 60,
-  medium: 20 * 60,
-  hard: 30 * 60,
-};
+// Timer is now server-authoritative — timerDuration in match-found is used for display only
+const DEFAULT_TIMER = 1800; // 30 min fallback
 
 const buildDefaultCodeMap = () =>
   Object.entries(LANGUAGE_CONFIG).reduce((acc, [key, config]) => {
@@ -84,13 +81,16 @@ const Battle = () => {
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionIntent, setExecutionIntent] = useState(null);
   const [matchFinished, setMatchFinished] = useState(false);
+  const [editorLocked, setEditorLocked] = useState(false);
   const [winner, setWinner] = useState(null);
+  const [matchResult, setMatchResult] = useState(null); // { ratingChanges, stats, matchId, draw, reason }
   const [aiFeedback, setAiFeedback] = useState('');
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [showLostModal, setShowLostModal] = useState(false);
   const [showWonModal, setShowWonModal] = useState(false);
-  const [activeTab, setActiveTab] = useState('output'); // 'output' or 'chat'
-  const [timeLeft, setTimeLeft] = useState(null);
+  const [showDrawModal, setShowDrawModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('output');
+  const [timeLeft, setTimeLeft] = useState(DEFAULT_TIMER);
   const [pendingNavigation, setPendingNavigation] = useState(null);
   // 2v2 team state
   const [matchType, setMatchType] = useState('1v1');
@@ -113,17 +113,10 @@ const Battle = () => {
 
     const handleMatchFound = (data) => {
       console.log('[Battle] Received match-found:', data);
-
-      // Use setTimeout to defer state updates and avoid setState during render
       setTimeout(() => {
-        if (data.question) {
-          console.log('[Battle] Setting question:', data.question.title);
-          setQuestion(data.question);
-        } else {
-          console.error('[Battle] No question in match-found data!');
-        }
-
-        // Handle 2v2 team information
+        if (data.question) setQuestion(data.question);
+        // Use server-provided timerDuration if available
+        if (data.timerDuration) setTimeLeft(data.timerDuration);
         if (data.type === '2v2') {
           setMatchType('2v2');
           setMyTeam(data.team || null);
@@ -136,6 +129,19 @@ const Battle = () => {
     };
 
     socket.on('match-found', handleMatchFound);
+
+    // Server-authoritative timer tick
+    socket.on('timer-tick', ({ remaining }) => {
+      setTimeLeft(remaining);
+    });
+
+    // Editor freeze: someone submitted correctly, match is decided
+    socket.on('match-locked', ({ winnerId }) => {
+      setEditorLocked(true);
+      if (winnerId && winnerId !== socket.id) {
+        setOutput('🔒 Match locked — opponent submitted a correct solution.');
+      }
+    });
 
     socket.on('receive-message', ({ user, socketId, message }) => {
       const isMe = socketId === socket.id;
@@ -188,41 +194,31 @@ const Battle = () => {
 
     socket.on('match-finished', (data) => {
       console.log('[Battle] Received match-finished:', data);
-      console.log('[Battle] My socket.id:', socket.id);
       setMatchFinished(true);
+      setEditorLocked(true);
+      setMatchResult(data);
 
-      // Determine if this user won or lost
-      let didIWin = false;
-
-      if (data.winner) {
-        // 1v1: check if winner socket ID matches ours
-        didIWin = data.winner === socket.id;
-        console.log('[Battle] 1v1 - Winner:', data.winner, 'Did I win?', didIWin);
-      } else if (data.winnerTeam) {
-        // 2v2: check if our team won
-        didIWin = data.winnerTeam === myTeam;
-        console.log('[Battle] 2v2 - Winner team:', data.winnerTeam, 'My team:', myTeam, 'Did I win?', didIWin);
+      if (data.draw) {
+        setShowDrawModal(true);
+        return;
       }
 
-      // Set winner state and show appropriate modal
-      setWinner(didIWin ? 'you' : 'opponent');
+      let didIWin = false;
+      if (data.winner) {
+        didIWin = data.winner === socket.id;
+      } else if (data.winnerTeam) {
+        didIWin = data.winnerTeam === myTeam;
+      }
 
+      setWinner(didIWin ? 'you' : 'opponent');
       if (didIWin) {
-        console.log('[Battle] Showing WON modal');
         setShowWonModal(true);
-        setShowLostModal(false);
       } else {
-        console.log('[Battle] Showing LOST modal');
-        setShowWonModal(false);
         setShowLostModal(true);
       }
 
       if (data.message) {
-        setChat(prev => [...prev, {
-          user: 'System',
-          message: data.message,
-          type: 'system'
-        }]);
+        setChat(prev => [...prev, { user: 'System', message: data.message, type: 'system' }]);
       }
     });
 
@@ -255,6 +251,8 @@ const Battle = () => {
 
     return () => {
       socket.off('match-found');
+      socket.off('timer-tick');
+      socket.off('match-locked');
       socket.off('receive-message');
       socket.off('score-update');
       socket.off('evaluation-started');
@@ -329,7 +327,7 @@ const Battle = () => {
   }, [matchFinished, pendingNavigation, navigate]);
 
   const executeCode = (intent = 'run') => {
-    if (!hasRunnableCode || isExecuting || !socket) return;
+    if (!hasRunnableCode || isExecuting || !socket || editorLocked) return;
     setExecutionIntent(intent);
     setIsExecuting(true);
     setOutput(intent === 'run' ? 'Running your code...' : 'Submitting for evaluation...');
@@ -339,7 +337,7 @@ const Battle = () => {
       code: currentCode,
       language_id: currentLanguageConfig.judgeId,
       inputOverride: question?.sampleInput,
-      isSubmit: intent === 'submit' // Run = false, Submit = true
+      isSubmit: intent === 'submit'
     });
   };
 
@@ -455,37 +453,47 @@ const Battle = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [matchFinished]);
 
+  // --- CLIENT-SIDE TIMER REMOVED --- timer now driven by server timer-tick events ---
+  // Fallback reconnection: if match-found wasn't received, poll state from server
   useEffect(() => {
-    if (!question) return;
-    const normalizedDifficulty = (question.difficulty || 'easy').toLowerCase();
-    const duration = DIFFICULTY_TIMERS[normalizedDifficulty] ?? DIFFICULTY_TIMERS.easy;
-    timerExpiredRef.current = false;
-    setTimeLeft(duration);
-  }, [question]);
+    if (!roomId || question) return;
+    const timeout = setTimeout(async () => {
+      if (!question) {
+        try {
+          const token = localStorage.getItem('token');
+          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+          const resp = await axios.get(`${API_URL}/api/match/${roomId}/state`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (resp.data.ok) {
+            if (resp.data.question) setQuestion(resp.data.question);
+            if (resp.data.timerRemaining !== undefined) setTimeLeft(resp.data.timerRemaining);
+            if (resp.data.editorLocked) setEditorLocked(true);
+            if (resp.data.status === 'finished') setMatchFinished(true);
+          }
+        } catch (e) {
+          console.error('[Battle] State recovery failed:', e);
+        }
+      }
+    }, 3000);
+    return () => clearTimeout(timeout);
+  }, [roomId, question]);
 
-  useEffect(() => {
-    if (timeLeft === null || matchFinished) return;
-    if (timeLeft === 0) {
-      handleTimerExpired();
-      return;
-    }
-    timerHandleRef.current = setTimeout(() => {
-      setTimeLeft((prev) => (prev === null ? prev : Math.max(prev - 1, 0)));
-    }, 1000);
-    return () => clearTimeout(timerHandleRef.current);
-  }, [timeLeft, matchFinished, handleTimerExpired]);
+  // ---------- RENDER: Post-Match Screens ----------
+  // Helper to render rating delta
+  const RatingDelta = ({ userId, ratingChanges }) => {
+    const me = ratingChanges?.find(r => r.userId === userId);
+    if (!me) return null;
+    const delta = me.newRating - me.oldRating;
+    return (
+      <span className={`flex items-center gap-1 font-bold text-lg ${delta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+        {delta >= 0 ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
+        {delta >= 0 ? '+' : ''}{delta} ({me.newRating})
+      </span>
+    );
+  };
 
-  useEffect(() => {
-    return () => clearTimeout(timerHandleRef.current);
-  }, []);
-
-  useEffect(() => {
-    if (matchFinished) {
-      clearTimeout(timerHandleRef.current);
-    }
-  }, [matchFinished]);
-
-  if (matchFinished) {
+  if (matchFinished && !showWonModal && !showLostModal && !showDrawModal) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <motion.div
@@ -495,17 +503,10 @@ const Battle = () => {
         >
           <Trophy className="text-primary mx-auto mb-4" size={80} />
           <h2 className="text-4xl font-bold mb-4 text-gradient">
-            {winner === socket?.id || winner === 'you' ? 'Victory!' : 'Defeat'}
+            {winner === 'you' ? 'Victory!' : 'Defeat'}
           </h2>
-          <p className="text-xl text-gray-400 mb-8">
-            {winner === socket?.id || winner === 'you'
-              ? 'Congratulations! You won the match!'
-              : 'Better luck next time!'}
-          </p>
-          <button
-            onClick={() => navigate('/lobby')}
-            className="bg-primary text-dark-900 px-8 py-3 rounded-lg font-semibold hover:bg-cyan-400 transition"
-          >
+          <button onClick={() => navigate('/lobby')}
+            className="bg-primary text-dark-900 px-8 py-3 rounded-lg font-semibold hover:bg-cyan-400 transition">
             Return to Lobby
           </button>
         </motion.div>
@@ -556,22 +557,46 @@ const Battle = () => {
         </div>
       )}
 
+      {/* Draw Modal */}
+      {showDrawModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            className="glass p-8 rounded-lg max-w-md w-full mx-4 text-center">
+            <Minus className="text-gray-400 mx-auto mb-4" size={60} />
+            <h3 className="text-3xl font-bold mb-2 text-gray-300">⏰ Draw</h3>
+            <p className="text-gray-400 mb-4">{matchResult?.message || "Time's up! It's a draw."}</p>
+            <button onClick={() => { setShowDrawModal(false); navigate('/lobby'); }}
+              className="bg-primary text-dark-900 px-8 py-3 rounded-lg font-semibold hover:bg-cyan-400 transition">
+              Return to Lobby
+            </button>
+          </motion.div>
+        </div>
+      )}
+
       {/* Lost Modal */}
       {showLostModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="glass p-8 rounded-lg max-w-md w-full mx-4 text-center"
-          >
-            <h3 className="text-3xl font-bold mb-4 text-red-400">😔 You Lost</h3>
-            <p className="text-gray-300 mb-6">
-              {winner === 'opponent' && matchFinished ? 'Your opponent solved the problem first. Better luck next time!' : 'You left the match. Your opponent wins!'}
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            className="glass p-8 rounded-lg max-w-md w-full mx-4 text-center">
+            <h3 className="text-3xl font-bold mb-2 text-red-400">😔 You Lost</h3>
+            <p className="text-gray-300 mb-4">
+              {winner === 'opponent' ? 'Your opponent solved the problem first.' : 'You left the match.'}
             </p>
-            <button
-              onClick={handleLostOk}
-              className="bg-primary text-dark-900 px-8 py-3 rounded-lg font-semibold hover:bg-cyan-400 transition"
-            >
+            {matchResult?.ratingChanges?.length > 0 && (
+              <div className="mb-6 p-3 bg-dark-700/60 rounded-lg border border-dark-600">
+                <p className="text-xs text-gray-400 mb-2">Rating Change</p>
+                {matchResult.ratingChanges.map((r, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-300">{r.username || 'You'}</span>
+                    <span className={`font-bold ${(r.delta ?? (r.after - r.before)) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {(r.delta ?? (r.after - r.before)) >= 0 ? '+' : ''}{r.delta ?? (r.after - r.before)} → {r.after ?? r.newRating}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={handleLostOk}
+              className="bg-primary text-dark-900 px-8 py-3 rounded-lg font-semibold hover:bg-cyan-400 transition">
               OK
             </button>
           </motion.div>
@@ -581,20 +606,32 @@ const Battle = () => {
       {/* Won Modal */}
       {showWonModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="glass p-8 rounded-lg max-w-md w-full mx-4 text-center"
-          >
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            className="glass p-8 rounded-lg max-w-md w-full mx-4 text-center">
             <Trophy className="text-primary mx-auto mb-4" size={60} />
-            <h3 className="text-3xl font-bold mb-4 text-primary">🎉 You Won! 🎉</h3>
-            <p className="text-gray-300 mb-6">
-              {winner === 'you' && matchFinished ? 'Congratulations! You solved the problem first!' : 'Your opponent left the match. You win!'}
-            </p>
-            <button
-              onClick={handleWonOk}
-              className="bg-primary text-dark-900 px-8 py-3 rounded-lg font-semibold hover:bg-cyan-400 transition"
-            >
+            <h3 className="text-3xl font-bold mb-2 text-primary">🎉 You Won!</h3>
+            {matchResult?.stats?.winner && (
+              <div className="flex gap-4 justify-center text-sm mb-4">
+                <span className="text-gray-400">⏱ {matchResult.stats.winner.solveTimeMs
+                  ? `${Math.round(matchResult.stats.winner.solveTimeMs / 1000)}s` : 'N/A'}</span>
+                <span className="text-gray-400">🔁 {matchResult.stats.winner.attempts} attempt(s)</span>
+              </div>
+            )}
+            {matchResult?.ratingChanges?.length > 0 && (
+              <div className="mb-6 p-3 bg-dark-700/60 rounded-lg border border-dark-600">
+                <p className="text-xs text-gray-400 mb-2">Rating Change</p>
+                {matchResult.ratingChanges.map((r, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-300">{r.username || 'You'}</span>
+                    <span className={`font-bold ${(r.delta ?? (r.after - r.before)) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {(r.delta ?? (r.after - r.before)) >= 0 ? '+' : ''}{r.delta ?? (r.after - r.before)} → {r.after ?? r.newRating}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={handleWonOk}
+              className="bg-primary text-dark-900 px-8 py-3 rounded-lg font-semibold hover:bg-cyan-400 transition">
               OK
             </button>
           </motion.div>
@@ -753,18 +790,16 @@ const Battle = () => {
                 </select>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={requestHint}
-                  className="flex items-center space-x-1.5 text-primary hover:text-cyan-400 transition text-sm px-3 py-1 rounded hover:bg-primary/10"
-                >
+                <button onClick={requestHint}
+                  disabled={editorLocked}
+                  className="flex items-center space-x-1.5 text-primary hover:text-cyan-400 transition text-sm px-3 py-1 rounded hover:bg-primary/10 disabled:opacity-40">
                   <Lightbulb size={16} />
                   <span>Get Hint</span>
                 </button>
                 <button
                   onClick={() => executeCode('run')}
-                  disabled={isExecuting || !hasRunnableCode}
-                  className="bg-primary text-dark-900 px-4 py-1.5 rounded-md text-xs font-semibold tracking-widest hover:bg-cyan-400 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary/20"
-                >
+                  disabled={isExecuting || !hasRunnableCode || editorLocked}
+                  className="bg-primary text-dark-900 px-4 py-1.5 rounded-md text-xs font-semibold tracking-widest hover:bg-cyan-400 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary/20">
                   {executionIntent === 'run' && isExecuting ? 'RUNNING' : 'RUN'}
                 </button>
               </div>
@@ -833,10 +868,10 @@ const Battle = () => {
                   <div className="bg-dark-900 border-t border-dark-700 px-4 py-2.5 flex justify-end space-x-2 flex-shrink-0">
                     <button
                       onClick={() => executeCode('submit')}
-                      disabled={isExecuting || !hasRunnableCode}
+                      disabled={isExecuting || !hasRunnableCode || editorLocked}
                       className="bg-primary text-dark-900 px-6 py-2 rounded-md text-sm font-semibold hover:bg-cyan-400 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary/20"
                     >
-                      {executionIntent === 'submit' && isExecuting ? 'Submitting...' : 'Submit'}
+                      {executionIntent === 'submit' && isExecuting ? 'Submitting...' : editorLocked ? 'Locked 🔒' : 'Submit'}
                     </button>
                   </div>
                 </div>
