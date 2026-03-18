@@ -341,6 +341,13 @@ const BattleRoyaleMatch = () => {
     );
   }
 
+  // ── Compute Player Leaderboard ────────────────────────
+  const playerLeaderboard = leaderboard
+    .filter(t => !t.eliminated)
+    .flatMap(t => t.playerSolves || [])
+    .sort((a, b) => a.submissionTimeMs - b.submissionTimeMs)
+    .map((p, index) => ({ ...p, rank: index + 1 }));
+
   // ── MAIN MATCH UI ─────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900">
@@ -385,7 +392,7 @@ const BattleRoyaleMatch = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-4">
-        <div className="grid lg:grid-cols-4 gap-4">
+        <div className="grid lg:grid-cols-5 gap-4">
           {/* Left: Question + Editor (3 cols) */}
           <div className="lg:col-span-3 space-y-4">
             {/* Question Panel */}
@@ -484,8 +491,9 @@ const BattleRoyaleMatch = () => {
             </div>
           </div>
 
-          {/* Right: Leaderboard (1 col) */}
-          <div className="space-y-4">
+          {/* Right: Leaderboards (2 cols) */}
+          <div className="lg:col-span-2 grid md:grid-cols-2 gap-4 items-start">
+            {/* Team Leaderboard */}
             <div className="bg-gray-800/60 backdrop-blur-sm rounded-xl p-4 border border-gray-700 sticky top-4">
               <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                 <Users className="w-5 h-5 text-cyan-400" />
@@ -569,6 +577,60 @@ const BattleRoyaleMatch = () => {
                         </div>
                       ))}
                   </div>
+                )}
+              </div>
+            </div>
+
+            {/* Player Leaderboard */}
+            <div className="bg-gray-800/60 backdrop-blur-sm rounded-xl p-4 border border-gray-700 sticky top-4">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <Award className="w-5 h-5 text-purple-400" />
+                Player Leaderboard
+              </h3>
+              <div className="space-y-2">
+                {playerLeaderboard.length === 0 ? (
+                  <p className="text-gray-500 text-sm text-center py-4">No submissions yet...</p>
+                ) : (
+                  playerLeaderboard.map(player => (
+                    <motion.div
+                      key={player.userId}
+                      layout
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className={`p-2.5 rounded-lg flex items-center gap-3 transition-all ${
+                        player.userId === user?.id
+                          ? 'bg-purple-600/30 border border-purple-500'
+                          : player.rank === 1
+                          ? 'bg-yellow-600/20 border border-yellow-600/50'
+                          : 'bg-gray-700/50 border border-gray-600/30'
+                      }`}
+                    >
+                      <div className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-xs font-bold ${
+                        player.rank === 1 ? 'bg-yellow-500 text-black' :
+                        player.rank === 2 ? 'bg-gray-400 text-black' :
+                        player.rank === 3 ? 'bg-orange-600 text-white' :
+                        'bg-gray-600 text-gray-300'
+                      }`}>
+                        {player.rank}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-semibold text-sm truncate">
+                            {player.username}
+                          </span>
+                          {player.userId === user?.id && <span className="text-xs">⭐</span>}
+                        </div>
+                        <div className="text-xs flex items-center gap-1 text-gray-400 mt-0.5">
+                          <span className="px-1.5 py-0.5 bg-gray-800 rounded font-medium text-[10px] border border-gray-600">
+                            Team {player.teamNumber}
+                          </span>
+                          <span className="text-cyan-400 font-mono ml-auto">
+                            {(player.submissionTimeMs / 1000).toFixed(1)}s
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))
                 )}
               </div>
             </div>

@@ -301,6 +301,26 @@ function handleBRSubmission(roomId, socketId, userId, correct, submitTimeMs) {
   });
 
   console.log(`[BREngine] Correct submission: user=${userId}, team=${playerTeam.teamNumber}, time=${submitTimeMs}ms`);
+
+  // Check for early round termination (all active players have solved)
+  const activePlayersCount = state.teams
+    .filter(t => t.status === 'active')
+    .reduce((acc, t) => acc + t.players.length, 0);
+
+  if (state.roundSubmissions.size >= activePlayersCount) {
+    console.log(`[BREngine] All ${activePlayersCount} active players have solved. Terminating round ${state.currentRound} ahead of timer.`);
+    
+    // Clear the existing timer so we don't trigger endBRRound twice
+    const timerId = roundTimers.get(roomId);
+    if (timerId) {
+      clearInterval(timerId);
+      roundTimers.delete(roomId);
+    }
+    
+    // Execute round end immediately
+    endBRRound(roomId);
+  }
+
   return { updated: true, leaderboard };
 }
 

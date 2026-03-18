@@ -165,6 +165,7 @@ customRoomSchema.methods.assignPlayerToSlot = function (teamNumber, slotNumber, 
     slot.playerId = playerId;
     slot.socketId = socketId;
     slot.username = username;
+    this.markModified('teams');
     return true;
 };
 
@@ -176,6 +177,7 @@ customRoomSchema.methods.removePlayer = function (playerId) {
                 slot.playerId = null;
                 slot.socketId = null;
                 slot.username = null;
+                this.markModified('teams');
                 return { teamNumber: team.teamNumber, slotNumber: slot.slotNumber };
             }
         }
