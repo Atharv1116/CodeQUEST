@@ -13,6 +13,7 @@ import Battle from './pages/Battle';
 import BattleRoyale from './pages/BattleRoyale';
 import BattleRoyaleMode from './pages/BattleRoyaleMode';
 import CustomRoomLobby from './pages/CustomRoomLobby';
+import BattleRoyaleMatch from './pages/BattleRoyaleMatch';
 import Dashboard from './pages/Dashboard';
 import Leaderboard from './pages/Leaderboard';
 import AITutor from './pages/AITutor';
@@ -98,6 +99,16 @@ function App() {
                   <ProtectedRoute>
                     <PageTransition>
                       <BattleRoyale />
+                    </PageTransition>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/battle-royale-match/:roomId"
+                element={
+                  <ProtectedRoute>
+                    <PageTransition>
+                      <BattleRoyaleMatch />
                     </PageTransition>
                   </ProtectedRoute>
                 }

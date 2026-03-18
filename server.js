@@ -25,6 +25,7 @@ const { submitToJudge0, LANGUAGE_IDS } = require('./config/judge0');
 const { run1v1Pipeline, run2v2Pipeline, runBattleRoyalePipeline } = require('./utils/ratingPipeline');
 const { calculateXP, calculateCoins, checkBadges } = require('./utils/gamification');
 const { getAIFeedback, getHint, recommendProblems, analyzePostMatch } = require('./services/aiTutor');
+const brEngine = require('./utils/battleRoyaleEngine');
 
 // Routes
 const authRoutes = require('./routes/auth');
@@ -47,6 +48,13 @@ const io = new Server(server, {
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
+  }
+});
+
+// Initialize Battle Royale Engine with Socket.IO
+brEngine.init(io, {
+  onQuestionChange: (roomId, question) => {
+    roomQuestion.set(roomId, question);
   }
 });
 
@@ -75,6 +83,72 @@ app.use('/api/auth', authRoutes);
 app.use('/api', apiRouter);
 app.use('/api/ai-tutor', aiTutorRouter);
 app.use('/api/custom-rooms', require('./routes/customRooms'));
+
+// Battle Royale state recovery endpoint
+app.get('/api/battle-royale/:roomId/state', authenticateToken, async (req, res) => {
+  const { roomId } = req.params;
+  const userId = req.userId;
+
+  try {
+    // Try in-memory state first
+    const brState = brEngine.getBRState(roomId);
+    if (brState) {
+      // Find player's team
+      let myTeam = null;
+      for (const team of brState.teams) {
+        if (team.players.some(p => p.userId === userId)) {
+          myTeam = team.teamNumber;
+          break;
+        }
+      }
+      return res.json({ ok: true, ...brState, myTeam });
+    }
+
+    // Fall back to DB
+    const BattleRoyaleMatch = require('./models/BattleRoyaleMatch');
+    const match = await BattleRoyaleMatch.findOne({ roomId });
+    if (match) {
+      let myTeam = null;
+      for (const team of match.teams) {
+        if (team.players.some(p => p.userId?.toString() === userId)) {
+          myTeam = team.teamNumber;
+          break;
+        }
+      }
+      return res.json({
+        ok: true,
+        status: match.status,
+        currentRound: match.currentRound,
+        totalRounds: match.totalRounds,
+        teams: match.teams,
+        finalRankings: match.finalRankings,
+        winnerTeam: match.winnerTeam,
+        timerRemaining: 0,
+        myTeam
+      });
+    }
+
+    res.status(404).json({ ok: false, error: 'Battle Royale match not found' });
+  } catch (error) {
+    console.error('[BR API] State error:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Battle Royale leaderboard endpoint
+app.get('/api/battle-royale/:roomId/leaderboard', authenticateToken, async (req, res) => {
+  const { roomId } = req.params;
+
+  try {
+    const brState = brEngine.getBRState(roomId);
+    if (brState) {
+      return res.json({ ok: true, leaderboard: brState.leaderboard, round: brState.currentRound });
+    }
+    res.status(404).json({ ok: false, error: 'No active BR match for this room' });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
 
 // Code evaluation endpoint
 app.post('/api/evaluate', async (req, res) => {
@@ -245,6 +319,9 @@ function stopMatchTimer(roomId) {
 async function handleTimerExpiry(roomId) {
   const state = roomState.get(roomId);
   if (!state || state.finished) return;
+
+  // Custom BR timer is managed by brEngine, not this handler
+  if (state.type === 'custom-battle-royale') return;
 
   console.log(`[Timer] Match timed out: ${roomId}`);
   state.finished = true;
@@ -1259,10 +1336,28 @@ io.on('connection', (socket) => {
           sc.attempts = (sc.attempts || 0) + 1;
           state.scores.set(socket.id, sc);
         }
+
+        // Custom Battle Royale: track wrong attempt via engine
+        if (state.type === 'custom-battle-royale') {
+          const brUserId = playerSessions.get(socket.id);
+          brEngine.handleBRSubmission(roomId, socket.id, brUserId, false, submitTimeMs);
+        }
         return;
       }
 
       // ===== CORRECT SUBMISSION =====
+
+      // --- CUSTOM BATTLE ROYALE: team-based, match stays open ---
+      if (state.type === 'custom-battle-royale') {
+        socket.emit('evaluation-result', { ok: true, correct: true, details, attempt: attemptNum });
+
+        // Route to BR engine (handles dedup, leaderboard update, broadcast)
+        const userId = playerSessions.get(socket.id);
+        brEngine.handleBRSubmission(roomId, socket.id, userId, true, submitTimeMs);
+        // Do NOT set state.finished or emit match-locked — all players keep playing
+        return;
+      }
+
       // --- GATE 4 (re-check after async Judge0) — atomic mutex ---
       // JS is single-threaded: if another submission already set finished=true,
       // this synchronous check catches it with no race condition.
@@ -1867,7 +1962,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Start custom match
+  // Start custom match — uses Battle Royale Engine for team-based mode
   socket.on('start-custom-match', async ({ roomId, userId }) => {
     try {
       const room = await CustomRoom.findOne({ roomId });
@@ -1884,54 +1979,63 @@ io.on('connection', (socket) => {
         return socket.emit('room-error', { error: 'Room has already started or ended' });
       }
 
-      // No minimum player requirement - host can start with any number of players
+      // Lock the room
       room.roomStatus = 'started';
       room.startedAt = new Date();
       await room.save();
 
       console.log(`[CustomRoom] Room ${room.roomCode} started by host ${userId}`);
 
-      // Get question for battle royale
-      const question = await getRandomQuestion();
-      roomQuestion.set(roomId, question);
-
-      // Initialize battle royale state
-      const playerList = [];
-      for (const team of room.teams) {
-        for (const slot of team.slots) {
-          if (slot.playerId) {
-            playerList.push({
-              id: slot.playerId.toString(),
-              socketId: slot.socketId,
-              username: slot.username,
-              team: team.teamNumber
-            });
-          }
-        }
-      }
-
-      roomState.set(roomId, {
-        type: 'battle-royale',
-        players: playerList.map(p => p.socketId),
-        playerIds: playerList.map(p => p.id),
-        scores: new Map(playerList.map(p => [p.socketId, { attempts: 0, solved: false, solvedAt: null }])),
-        finished: false,
-        startedAt: new Date()
-      });
-
-      // Broadcast match start
+      // Show countdown to all players
       io.to(roomId).emit('match-starting', {
         roomId,
-        question,
-        players: playerList,
         message: 'Match is starting!'
       });
 
-      // Navigate all players to battle royale page
-      setTimeout(() => {
-        io.to(roomId).emit('navigate-to-match', {
-          destination: `/battle-royale/${roomId}`
-        });
+      // After countdown, initialize the BR engine and navigate players
+      setTimeout(async () => {
+        try {
+          // Initialize team-based Battle Royale via engine
+          const brState = await brEngine.initBattleRoyale(roomId, room);
+
+          // Set a lightweight roomState entry so submit-code can route correctly
+          // The actual game logic lives in brEngine, not in roomState
+          const playerList = [];
+          for (const team of room.teams) {
+            for (const slot of team.slots) {
+              if (slot.playerId) {
+                playerList.push({
+                  id: slot.playerId.toString(),
+                  socketId: slot.socketId,
+                  username: slot.username,
+                  team: team.teamNumber
+                });
+              }
+            }
+          }
+
+          roomState.set(roomId, {
+            type: 'custom-battle-royale',
+            players: playerList.map(p => p.socketId),
+            playerIds: playerList.map(p => p.id),
+            finished: false,
+            startedAt: new Date()
+          });
+
+          // Store the question for the generic question recovery endpoint
+          const stateData = brEngine.getBRState(roomId);
+          if (stateData?.question) {
+            roomQuestion.set(roomId, stateData.question);
+          }
+
+          // Navigate all players to the new BR match page
+          io.to(roomId).emit('navigate-to-match', {
+            destination: `/battle-royale-match/${roomId}`
+          });
+        } catch (initError) {
+          console.error('[CustomRoom] BR init error:', initError.message);
+          io.to(roomId).emit('room-error', { error: 'Failed to start match: ' + initError.message });
+        }
       }, 3000);
     } catch (error) {
       console.error('[CustomRoom] Error starting match:', error);
