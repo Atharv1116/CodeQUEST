@@ -140,6 +140,13 @@ const BattleRoyaleAdmin = () => {
 
   const timerColor = timeLeft <= 30 ? 'text-red-400' : timeLeft <= 60 ? 'text-yellow-400' : 'text-cyan-400';
 
+  // ── Compute Player Leaderboard ────────────────────────
+  const playerLeaderboard = leaderboard
+    .filter(t => !t.eliminated)
+    .flatMap(t => t.playerSolves || [])
+    .sort((a, b) => a.submissionTimeMs - b.submissionTimeMs)
+    .map((p, index) => ({ ...p, rank: index + 1 }));
+
   // ── FINAL RESULTS SCREEN ──────────────────────────────
   if (matchStatus === 'finished' && finalResults) {
     return (
@@ -282,7 +289,7 @@ const BattleRoyaleAdmin = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-4">
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid lg:grid-cols-4 gap-6">
           {/* Left: Question View */}
           <div className="lg:col-span-1 space-y-4">
             <div className="bg-gray-800/60 backdrop-blur-sm rounded-xl p-5 border border-gray-700 h-[calc(100vh-140px)] overflow-y-auto">
@@ -321,12 +328,13 @@ const BattleRoyaleAdmin = () => {
             </div>
           </div>
 
-          {/* Right: Live Leaderboard */}
-          <div className="lg:col-span-2">
+          {/* Right: Live Leaderboards (2 cols) */}
+          <div className="lg:col-span-3 grid md:grid-cols-2 gap-6 items-start">
+            {/* Team Leaderboard */}
             <div className="bg-gray-800/60 backdrop-blur-sm rounded-xl p-6 border border-gray-700 h-[calc(100vh-140px)] overflow-y-auto">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold text-white flex items-center gap-3">
-                  <Users className="w-7 h-7 text-cyan-400" />
+                <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                  <Users className="w-6 h-6 text-cyan-400" />
                   Live Team Leaderboard
                 </h3>
                 <div className="text-sm text-gray-400">
@@ -355,7 +363,7 @@ const BattleRoyaleAdmin = () => {
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-4">
-                          <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
+                          <span className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center font-bold ${
                             team.rank === 1 ? 'bg-yellow-500 text-black' :
                             team.rank === 2 ? 'bg-gray-400 text-black' :
                             team.rank === 3 ? 'bg-orange-600 text-white' :
@@ -363,38 +371,26 @@ const BattleRoyaleAdmin = () => {
                           }`}>
                             {team.rank}
                           </span>
-                          <div>
-                            <span className="text-white font-bold text-lg">
+                          <div className="min-w-0">
+                            <span className="text-white font-bold text-lg truncate block">
                               Team {team.teamNumber}
                             </span>
-                            <div className="text-xs text-gray-400 mt-0.5">
+                            <div className="text-xs text-gray-400 mt-0.5 truncate max-w-[120px]">
                               {(team.players || []).map(p => p.username).join(', ')}
                             </div>
                           </div>
                         </div>
-                        <div className="flex flex-col items-end">
-                          <span className="text-cyan-400 font-bold text-lg">
+                        <div className="flex flex-col items-end shrink-0 pl-2">
+                          <span className="text-cyan-400 font-bold text-md">
                             {team.solvesCount}/{team.totalPlayers} solved
                           </span>
                           {team.totalTimeMs > 0 && (
-                            <span className="text-gray-400 text-sm">
-                              {(team.totalTimeMs / 1000).toFixed(1)}s total time
+                            <span className="text-gray-400 text-xs">
+                              {(team.totalTimeMs / 1000).toFixed(1)}s
                             </span>
                           )}
                         </div>
                       </div>
-                      
-                      {/* Player solve timeline */}
-                      {team.playerSolves && team.playerSolves.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-gray-600/50 flex flex-wrap gap-2">
-                          {team.playerSolves.map((ps, i) => (
-                            <div key={i} className="px-2 py-1 bg-green-500/20 border border-green-500/30 rounded flex items-center gap-1.5">
-                              <span className="text-green-400 font-semibold text-xs">✅ {ps.username}</span>
-                              <span className="text-green-500/70 text-[10px]">{(ps.submissionTimeMs / 1000).toFixed(1)}s</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </motion.div>
                   ))}
 
@@ -404,26 +400,79 @@ const BattleRoyaleAdmin = () => {
                     <h4 className="text-sm text-red-400/80 mb-3 font-semibold flex items-center gap-2">
                       <Skull className="w-4 h-4" /> Eliminated Teams
                     </h4>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
                       {leaderboard
                         .filter(t => t.eliminated)
                         .map(team => (
                           <div key={team.teamNumber} className="p-3 rounded-lg bg-red-900/10 border border-red-800/30 flex justify-between items-center">
-                            <div>
-                                <span className="text-red-400/80 text-sm font-medium block">
+                            <div className="min-w-0">
+                                <span className="text-red-400/80 text-sm font-medium block truncate">
                                 Team {team.teamNumber}
                                 </span>
-                                <span className="text-red-500/50 text-xs">
+                                <span className="text-red-500/50 text-xs truncate block max-w-[80px]">
                                 {(team.players || []).map(p => p.username).join(', ')}
                                 </span>
                             </div>
-                            <span className="text-red-500/70 text-xs font-semibold px-2 py-1 bg-red-900/40 rounded">
+                            <span className="text-red-500/70 text-[10px] font-semibold px-1.5 py-0.5 bg-red-900/40 rounded shrink-0">
                               Out R{team.eliminatedInRound}
                             </span>
                           </div>
                         ))}
                     </div>
                   </div>
+                )}
+              </div>
+            </div>
+
+            {/* Player Leaderboard */}
+            <div className="bg-gray-800/60 backdrop-blur-sm rounded-xl p-6 border border-gray-700 h-[calc(100vh-140px)] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                  <Award className="w-6 h-6 text-purple-400" />
+                  Player Submissions
+                </h3>
+              </div>
+              <div className="space-y-3">
+                {playerLeaderboard.length === 0 ? (
+                  <p className="text-gray-500 text-sm text-center py-8">Waiting for players to solve...</p>
+                ) : (
+                  playerLeaderboard.map(player => (
+                    <motion.div
+                      key={player.userId}
+                      layout
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className={`p-3 rounded-xl flex items-center gap-3 transition-all ${
+                        player.rank === 1
+                          ? 'bg-yellow-600/20 border border-yellow-600/50'
+                          : 'bg-gray-700/50 border border-gray-600/30'
+                      }`}
+                    >
+                      <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center font-bold ${
+                        player.rank === 1 ? 'bg-yellow-500 text-black' :
+                        player.rank === 2 ? 'bg-gray-400 text-black' :
+                        player.rank === 3 ? 'bg-orange-600 text-white' :
+                        'bg-gray-600 text-gray-300'
+                      }`}>
+                        {player.rank}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-semibold text-md truncate">
+                            {player.username}
+                          </span>
+                        </div>
+                        <div className="text-xs flex items-center gap-2 text-gray-400 mt-1">
+                          <span className="px-2 py-0.5 bg-gray-900 rounded font-medium border border-gray-600">
+                            Team {player.teamNumber}
+                          </span>
+                          <span className="text-cyan-400 font-mono ml-auto">
+                            {(player.submissionTimeMs / 1000).toFixed(2)}s
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))
                 )}
               </div>
             </div>

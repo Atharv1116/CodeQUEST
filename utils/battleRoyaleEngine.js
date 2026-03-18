@@ -348,10 +348,15 @@ function computeTeamLeaderboard(state) {
       totalPlayers,
       totalTimeMs,
       rank: 0, // computed after sort
-      playerSolves: teamSubmissions.map(s => ({
-        userId: s.userId,
-        submissionTimeMs: s.submissionTimeMs
-      }))
+      playerSolves: teamSubmissions.map(s => {
+        const pObj = team.players.find(p => p.userId === s.userId);
+        return {
+          userId: s.userId,
+          username: pObj ? pObj.username : s.userId,
+          teamNumber: team.teamNumber,
+          submissionTimeMs: s.submissionTimeMs
+        };
+      })
     };
   });
 
