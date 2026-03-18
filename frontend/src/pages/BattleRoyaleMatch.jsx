@@ -342,8 +342,7 @@ const BattleRoyaleMatch = () => {
   const playerLeaderboard = leaderboard
     .filter(t => !t.eliminated)
     .flatMap(t => t.playerSolves || [])
-    .sort((a, b) => a.submissionTimeMs - b.submissionTimeMs)
-    .map((p, index) => ({ ...p, rank: index + 1 }));
+    .sort((a, b) => a.submissionTimeMs - b.submissionTimeMs);
 
   // ── MAIN MATCH UI ─────────────────────────────────────
   return (
@@ -529,15 +528,20 @@ const BattleRoyaleMatch = () => {
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-cyan-400 font-mono">
-                          {team.solvesCount}/{team.totalPlayers} solved
+                      <div className="flex items-center justify-between text-xs mt-1">
+                        <span className="text-cyan-400 font-mono font-bold">
+                          {team.teamPoints} pts
                         </span>
-                        {team.totalTimeMs > 0 && (
+                        <div className="flex gap-2">
                           <span className="text-gray-400">
-                            {(team.totalTimeMs / 1000).toFixed(1)}s
+                            {team.solvesCount}/{team.totalPlayers} solved
                           </span>
-                        )}
+                          {team.teamTotalTimeMs > 0 && (
+                            <span className="text-gray-500">
+                              {(team.teamTotalTimeMs / 1000).toFixed(1)}s avg
+                            </span>
+                          )}
+                        </div>
                       </div>
                       {/* Player solve indicators */}
                       {team.playerSolves && team.playerSolves.length > 0 && (
@@ -617,11 +621,14 @@ const BattleRoyaleMatch = () => {
                           </span>
                           {player.userId === user?.id && <span className="text-xs">⭐</span>}
                         </div>
-                        <div className="text-xs flex items-center gap-1 text-gray-400 mt-0.5">
+                        <div className="text-xs flex items-center gap-2 text-gray-400 mt-0.5">
                           <span className="px-1.5 py-0.5 bg-gray-800 rounded font-medium text-[10px] border border-gray-600">
                             Team {player.teamNumber}
                           </span>
-                          <span className="text-cyan-400 font-mono ml-auto">
+                          <span className="text-purple-400 font-mono font-bold ml-auto">
+                            +{player.points} pts
+                          </span>
+                          <span className="text-cyan-400 font-mono">
                             {(player.submissionTimeMs / 1000).toFixed(1)}s
                           </span>
                         </div>

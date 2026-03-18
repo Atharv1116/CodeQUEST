@@ -140,12 +140,10 @@ const BattleRoyaleAdmin = () => {
 
   const timerColor = timeLeft <= 30 ? 'text-red-400' : timeLeft <= 60 ? 'text-yellow-400' : 'text-cyan-400';
 
-  // ── Compute Player Leaderboard ────────────────────────
   const playerLeaderboard = leaderboard
     .filter(t => !t.eliminated)
     .flatMap(t => t.playerSolves || [])
-    .sort((a, b) => a.submissionTimeMs - b.submissionTimeMs)
-    .map((p, index) => ({ ...p, rank: index + 1 }));
+    .sort((a, b) => a.submissionTimeMs - b.submissionTimeMs);
 
   // ── FINAL RESULTS SCREEN ──────────────────────────────
   if (matchStatus === 'finished' && finalResults) {
@@ -382,13 +380,18 @@ const BattleRoyaleAdmin = () => {
                         </div>
                         <div className="flex flex-col items-end shrink-0 pl-2">
                           <span className="text-cyan-400 font-bold text-md">
-                            {team.solvesCount}/{team.totalPlayers} solved
+                            {team.teamPoints} pts
                           </span>
-                          {team.totalTimeMs > 0 && (
+                          <div className="flex items-center gap-2 mt-1">
                             <span className="text-gray-400 text-xs">
-                              {(team.totalTimeMs / 1000).toFixed(1)}s
+                              {team.solvesCount}/{team.totalPlayers} solved
                             </span>
-                          )}
+                            {team.teamTotalTimeMs > 0 && (
+                              <span className="text-gray-500 text-xs">
+                                {(team.teamTotalTimeMs / 1000).toFixed(1)}s avg
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </motion.div>
@@ -466,7 +469,10 @@ const BattleRoyaleAdmin = () => {
                           <span className="px-2 py-0.5 bg-gray-900 rounded font-medium border border-gray-600">
                             Team {player.teamNumber}
                           </span>
-                          <span className="text-cyan-400 font-mono ml-auto">
+                          <span className="text-purple-400 font-mono font-bold ml-auto">
+                            +{player.points} pts
+                          </span>
+                          <span className="text-cyan-400 font-mono">
                             {(player.submissionTimeMs / 1000).toFixed(2)}s
                           </span>
                         </div>

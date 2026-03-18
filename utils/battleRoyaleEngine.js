@@ -324,59 +324,118 @@ function handleBRSubmission(roomId, socketId, userId, correct, submitTimeMs) {
   return { updated: true, leaderboard };
 }
 
+const SCORING_CURVE = [
+  100, 92, 85, 79, 74, 69, 65, 61, 58, 55, 
+  52, 49, 46, 43, 40, 37, 35, 33, 31, 29, 
+  27, 25, 23, 21, 19, 17, 16, 15, 14, 13, 
+  12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 
+  3, 3, 2, 2, 2, 2, 1, 1, 1, 1
+];
+
+function getDynamicPoints(rank, totalPlayers) {
+  if (totalPlayers <= 1) return SCORING_CURVE[0];
+  
+  // Scale rank (1..totalPlayers) mapped onto (0..49) index range
+  let exact = ((rank - 1) / (totalPlayers - 1)) * (SCORING_CURVE.length - 1);
+  if (exact < 0) exact = 0;
+  if (exact > SCORING_CURVE.length - 1) exact = SCORING_CURVE.length - 1;
+
+  const lower = Math.floor(exact);
+  const upper = Math.ceil(exact);
+  const fraction = exact - lower;
+  
+  if (lower >= SCORING_CURVE.length - 1) return SCORING_CURVE[SCORING_CURVE.length - 1];
+  
+  return Math.round(SCORING_CURVE[lower] * (1 - fraction) + SCORING_CURVE[upper] * fraction);
+}
+
 /**
  * Compute team leaderboard for current round.
- * Returns sorted array: [{ teamNumber, solvesCount, totalTimeMs, rank, players }]
+ * Returns sorted array with full Esports dynamic point metrics.
  */
 function computeTeamLeaderboard(state) {
   const activeTeams = state.teams.filter(t => t.status === 'active');
-  const teamScores = activeTeams.map(team => {
-    const teamSubmissions = [];
-    for (const [, sub] of state.roundSubmissions) {
-      if (sub.teamNumber === team.teamNumber) {
-        teamSubmissions.push(sub);
-      }
+  const N = activeTeams.reduce((acc, t) => acc + (t.players ? t.players.length : 0), 0);
+
+  // Extract all correct submissions into a list
+  const allSubmissions = [];
+  for (const [, sub] of state.roundSubmissions) {
+    allSubmissions.push(sub);
+  }
+
+  // Sort globally by time to deduce exact ranks
+  allSubmissions.sort((a, b) => a.submissionTimeMs - b.submissionTimeMs);
+
+  // Extract global rank honoring ties (competitive ranking system skips next index)
+  for (let i = 0; i < allSubmissions.length; i++) {
+    if (i > 0 && allSubmissions[i].submissionTimeMs === allSubmissions[i - 1].submissionTimeMs) {
+      allSubmissions[i].individualRank = allSubmissions[i - 1].individualRank;
+    } else {
+      allSubmissions[i].individualRank = i + 1;
     }
+    allSubmissions[i].points = getDynamicPoints(allSubmissions[i].individualRank, N);
+  }
+
+  const teamScores = activeTeams.map(team => {
+    const teamSubmissions = allSubmissions.filter(s => s.teamNumber === team.teamNumber);
 
     const solvesCount = teamSubmissions.length;
-    const totalTimeMs = teamSubmissions.reduce((sum, s) => sum + s.submissionTimeMs, 0);
-    const totalPlayers = team.players.length;
+    const totalPlayers = team.players ? team.players.length : 0;
+    
+    // Extrapolate core metrics based on player performance limits
+    const teamPoints = teamSubmissions.reduce((sum, s) => sum + s.points, 0);
+    const teamTotalTimeMs = teamSubmissions.reduce((sum, s) => sum + s.submissionTimeMs, 0);
+    const bestIndividualRank = teamSubmissions.length > 0 
+      ? Math.min(...teamSubmissions.map(s => s.individualRank))
+      : 999999;
 
     return {
       teamNumber: team.teamNumber,
       solvesCount,
       totalPlayers,
-      totalTimeMs,
-      rank: 0, // computed after sort
+      teamPoints,
+      teamTotalTimeMs,
+      bestIndividualRank,
+      rank: 0, // computed after rigorous sort
       playerSolves: teamSubmissions.map(s => {
         const pObj = team.players.find(p => p.userId === s.userId);
         return {
           userId: s.userId,
           username: pObj ? pObj.username : s.userId,
           teamNumber: team.teamNumber,
-          submissionTimeMs: s.submissionTimeMs
+          submissionTimeMs: s.submissionTimeMs,
+          rank: s.individualRank,
+          points: s.points
         };
       })
     };
   });
 
-  // Sort: primary = more solves first, secondary = less total time first
+  // Sort algorithm targeting precise Esports rules
   teamScores.sort((a, b) => {
-    if (b.solvesCount !== a.solvesCount) return b.solvesCount - a.solvesCount;
-    return a.totalTimeMs - b.totalTimeMs;
+    // 1. Total Points (Descending)
+    if (b.teamPoints !== a.teamPoints) return b.teamPoints - a.teamPoints;
+    // 2. Combined Time (Ascending - Faster is better)
+    if (a.teamTotalTimeMs !== b.teamTotalTimeMs) return a.teamTotalTimeMs - b.teamTotalTimeMs;
+    // 3. Best Submitting Rank (Ascending - Rank 1 beats 2)
+    if (a.bestIndividualRank !== b.bestIndividualRank) return a.bestIndividualRank - b.bestIndividualRank;
+    // 4. Number of Completed Solves
+    return b.solvesCount - a.solvesCount;
   });
 
-  // Assign ranks
+  // Stamp output ranks sequentially
   teamScores.forEach((t, idx) => { t.rank = idx + 1; });
 
-  // Include eliminated teams at the bottom
+  // Append eliminated teams seamlessly
   const eliminatedTeams = state.teams
     .filter(t => t.status === 'eliminated')
     .map(t => ({
       teamNumber: t.teamNumber,
       solvesCount: 0,
-      totalPlayers: t.players.length,
-      totalTimeMs: 0,
+      totalPlayers: t.players ? t.players.length : 0,
+      teamPoints: 0,
+      teamTotalTimeMs: 0,
+      bestIndividualRank: 999999,
       rank: teamScores.length + 1,
       eliminated: true,
       eliminatedInRound: t.eliminatedInRound,
