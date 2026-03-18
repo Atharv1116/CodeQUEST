@@ -37,14 +37,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: [
-      'https://deployment-3yen98p15-atharvanikhade94-7076s-projects.vercel.app',
-      'https://deployment-iota-jet.vercel.app',
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:3000',
-      'http://127.0.0.1:5173'
-    ],
+    origin: true, // Dynamically allow request origin for Vercel preview environments
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
@@ -61,14 +54,7 @@ brEngine.init(io, {
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: [
-    'https://deployment-3yen98p15-atharvanikhade94-7076s-projects.vercel.app',
-    'https://deployment-iota-jet.vercel.app',
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://localhost:3000',
-    'http://127.0.0.1:5173'
-  ],
+  origin: true, // Dynamically allow request origin for Vercel preview environments
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']

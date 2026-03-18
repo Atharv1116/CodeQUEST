@@ -154,6 +154,9 @@ const CustomRoomLobby = () => {
         setMySlot(null);
     };
 
+    const actualHostId = room ? (typeof room.hostId === 'object' && room.hostId !== null ? (room.hostId._id || room.hostId.id) : room.hostId) : null;
+    const isHost = room && user ? String(actualHostId) === String(user.id) : false;
+
     const handleCopyCode = () => {
         navigator.clipboard.writeText(room.roomCode);
         setCopied(true);
@@ -194,9 +197,9 @@ const CustomRoomLobby = () => {
     };
 
     const handleStartMatch = () => {
-        if (!socket || !user) return;
+        if (!socket || !user || !room) return;
 
-        if (room.hostId !== user.id) {
+        if (!isHost) {
             alert('Only the host can start the match');
             return;
         }
@@ -209,7 +212,7 @@ const CustomRoomLobby = () => {
     };
 
     const handleUpdateSettings = (newSettings) => {
-        if (!socket || !user || room.hostId !== user.id) return;
+        if (!socket || !user || !isHost) return;
 
         socket.emit('update-room-settings', {
             roomId,
@@ -248,7 +251,6 @@ const CustomRoomLobby = () => {
         );
     }
 
-    const isHost = room.hostId === user.id;
     const canStart = isHost && room.totalPlayers >= 2; // Enable at 2+ players
 
     return (
@@ -365,7 +367,7 @@ const CustomRoomLobby = () => {
                                 teamNumber={99}
                                 onClick={() => handleSlotClick(99, slot.slotNumber, slot)}
                                 isMySlot={mySlot?.teamNumber === 99 && mySlot?.slotNumber === slot.slotNumber}
-                                isHost={slot.playerId === room.hostId}
+                                isHost={slot.playerId === actualHostId}
                                 canClick={room.roomStatus === 'waiting' && !slot.playerId && !slot.isLocked}
                             />
                         ))}
@@ -380,7 +382,7 @@ const CustomRoomLobby = () => {
                             team={team}
                             onSlotClick={handleSlotClick}
                             mySlot={mySlot}
-                            hostId={room.hostId}
+                            hostId={actualHostId}
                             roomStatus={room.roomStatus}
                         />
                     ))}
