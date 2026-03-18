@@ -82,7 +82,7 @@ app.get('/api/battle-royale/:roomId/state', authenticateToken, async (req, res) 
       // Find player's team
       let myTeam = null;
       for (const team of brState.teams) {
-        if (team.players.some(p => p.userId === userId)) {
+        if (team.players.some(p => p.userId?.toString() === userId?.toString())) {
           myTeam = team.teamNumber;
           break;
         }

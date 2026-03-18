@@ -24,7 +24,6 @@ const BattleRoyaleMatch = () => {
   const [timeLeft, setTimeLeft] = useState(300);
   const [leaderboard, setLeaderboard] = useState([]);
   const [teams, setTeams] = useState([]);
-  const [myTeam, setMyTeam] = useState(null);
   const [eliminationSchedule, setEliminationSchedule] = useState([]);
   const [evaluating, setEvaluating] = useState(false);
   const [editorLocked, setEditorLocked] = useState(false);
@@ -42,15 +41,15 @@ const BattleRoyaleMatch = () => {
   const hasRecovered = useRef(false);
 
   // ── Find my team ──────────────────────────────────────
-  const findMyTeam = useCallback((teamsList) => {
-    if (!user || !teamsList) return null;
-    for (const team of teamsList) {
+  const myTeam = React.useMemo(() => {
+    if (!user || !teams || teams.length === 0) return null;
+    for (const team of teams) {
       if (team.players?.some(p => p.userId === user.id)) {
         return team.teamNumber;
       }
     }
     return null;
-  }, [user]);
+  }, [user, teams]);
 
   // ── State recovery on mount ───────────────────────────
   useEffect(() => {
@@ -75,7 +74,6 @@ const BattleRoyaleMatch = () => {
           if (data.teams) setTeams(data.teams);
           if (data.leaderboard) setLeaderboard(data.leaderboard);
           if (data.eliminationSchedule) setEliminationSchedule(data.eliminationSchedule);
-          if (data.myTeam) setMyTeam(data.myTeam);
           if (data.status) setMatchStatus(data.status);
           if (data.status === 'finished' && data.finalRankings) {
             setFinalResults({ finalRankings: data.finalRankings, winnerTeam: data.winnerTeam });
@@ -100,7 +98,6 @@ const BattleRoyaleMatch = () => {
       setTeams(data.teams || []);
       setLeaderboard(data.leaderboard || []);
       setEliminationSchedule(data.eliminationSchedule || []);
-      setMyTeam(findMyTeam(data.teams));
       setMatchStatus('active');
       setMySolved(false);
       setEditorLocked(false);
@@ -200,7 +197,7 @@ const BattleRoyaleMatch = () => {
       socket.off('evaluation-result', onEvaluationResult);
       socket.off('match-locked', onMatchLocked);
     };
-  }, [socket, roomId, findMyTeam]);
+  }, [socket, roomId]);
 
   // ── Actions ───────────────────────────────────────────
   const runCode = () => {
