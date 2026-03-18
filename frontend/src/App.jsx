@@ -12,6 +12,7 @@ import Lobby from './pages/Lobby';
 import Battle from './pages/Battle';
 import BattleRoyale from './pages/BattleRoyale';
 import BattleRoyaleMode from './pages/BattleRoyaleMode';
+import CustomRoomLobby from './pages/CustomRoomLobby';
 import BattleRoyaleMatch from './pages/BattleRoyaleMatch';
 import BattleRoyaleAdmin from './pages/BattleRoyaleAdmin';
 import Dashboard from './pages/Dashboard';
