@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -41,7 +41,7 @@ const BattleRoyaleMatch = () => {
   const hasRecovered = useRef(false);
 
   // ── Find my team ──────────────────────────────────────
-  const myTeam = React.useMemo(() => {
+  const myTeam = useMemo(() => {
     if (!user || !teams || teams.length === 0) return null;
     for (const team of teams) {
       if (team.players?.some(p => p.userId === user.id)) {
