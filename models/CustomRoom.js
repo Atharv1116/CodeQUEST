@@ -15,14 +15,6 @@ const teamSchema = new mongoose.Schema({
     slots: [slotSchema]
 }, { _id: false });
 
-// Administrator slot schema
-const adminSlotSchema = new mongoose.Schema({
-    slotNumber: { type: Number, required: true },
-    adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-    socketId: { type: String, default: null },
-    username: { type: String, default: null }
-}, { _id: false });
-
 const customRoomSchema = new mongoose.Schema({
     roomId: {
         type: String,
@@ -60,7 +52,6 @@ const customRoomSchema = new mongoose.Schema({
         min: 1,
         max: 10
     },
-    administrators: [adminSlotSchema],
     roomStatus: {
         type: String,
         enum: ['waiting', 'started', 'ended'],
@@ -108,6 +99,7 @@ const customRoomSchema = new mongoose.Schema({
 // Virtual for total players count
 customRoomSchema.virtual('totalPlayers').get(function () {
     return this.teams.reduce((total, team) => {
+        if (team.teamNumber === 99) return total; // Exclude admins/spectators
         return total + team.slots.filter(slot => slot.playerId !== null).length;
     }, 0);
 });
@@ -115,6 +107,7 @@ customRoomSchema.virtual('totalPlayers').get(function () {
 // Initialize teams and slots when room is created
 customRoomSchema.methods.initializeTeams = function () {
     this.teams = [];
+    // Normal teams
     for (let i = 1; i <= this.maxTeams; i++) {
         const slots = [];
         for (let j = 1; j <= this.maxPlayersPerTeam; j++) {
@@ -131,6 +124,22 @@ customRoomSchema.methods.initializeTeams = function () {
             slots
         });
     }
+
+    // Admin/Spectator team (Team 99) - Always has 5 slots
+    const adminSlots = [];
+    for (let j = 1; j <= 5; j++) {
+        adminSlots.push({
+            slotNumber: j,
+            playerId: null,
+            socketId: null,
+            username: null,
+            isLocked: false
+        });
+    }
+    this.teams.push({
+        teamNumber: 99,
+        slots: adminSlots
+    });
 };
 
 // Find first available slot
@@ -207,46 +216,6 @@ customRoomSchema.methods.isFull = function () {
     return this.totalPlayers >= this.maxTeams * this.maxPlayersPerTeam;
 };
 
-// Initialize administrator slots
-customRoomSchema.methods.initializeAdministrators = function () {
-    this.administrators = [];
-    for (let i = 1; i <= 5; i++) {
-        this.administrators.push({
-            slotNumber: i,
-            adminId: null,
-            socketId: null,
-            username: null
-        });
-    }
-};
-
-// Assign administrator to slot
-customRoomSchema.methods.assignAdministrator = function (slotNumber, adminId, socketId, username) {
-    const slot = this.administrators.find(s => s.slotNumber === slotNumber);
-    if (!slot || slot.adminId) return false;
-
-    slot.adminId = adminId;
-    slot.socketId = socketId;
-    slot.username = username;
-    return true;
-};
-
-// Remove administrator
-customRoomSchema.methods.removeAdministrator = function (adminId) {
-    const slot = this.administrators.find(s => s.adminId && s.adminId.toString() === adminId.toString());
-    if (!slot) return null;
-
-    slot.adminId = null;
-    slot.socketId = null;
-    slot.username = null;
-    return slot.slotNumber;
-};
-
-// Find available admin slot
-customRoomSchema.methods.findAvailableAdminSlot = function () {
-    const slot = this.administrators.find(s => !s.adminId);
-    return slot ? slot.slotNumber : null;
-};
 
 // Ensure virtuals are included in JSON
 customRoomSchema.set('toJSON', { virtuals: true });

@@ -2028,10 +2028,13 @@ io.on('connection', (socket) => {
             roomQuestion.set(roomId, stateData.question);
           }
 
-          // Navigate all players to the new BR match page
-          io.to(roomId).emit('navigate-to-match', {
-            destination: `/battle-royale-match/${roomId}`
-          });
+          // Navigate players based on team
+          for (const player of playerList) {
+            const dest = player.team === 99
+              ? `/battle-royale-admin/${roomId}`
+              : `/battle-royale-match/${roomId}`;
+            io.to(player.socketId).emit('navigate-to-match', { destination: dest });
+          }
         } catch (initError) {
           console.error('[CustomRoom] BR init error:', initError.message);
           io.to(roomId).emit('room-error', { error: 'Failed to start match: ' + initError.message });
@@ -2039,67 +2042,6 @@ io.on('connection', (socket) => {
       }, 3000);
     } catch (error) {
       console.error('[CustomRoom] Error starting match:', error);
-      socket.emit('room-error', { error: error.message });
-    }
-  });
-
-  // Join as administrator
-  socket.on('join-as-admin', async ({ roomId, userId }) => {
-    try {
-      const room = await CustomRoom.findOne({ roomId });
-
-      if (!room) {
-        return socket.emit('room-error', { error: 'Room not found' });
-      }
-
-      if (room.roomStatus !== 'waiting') {
-        return socket.emit('room-error', { error: 'Cannot join as admin after match started' });
-      }
-
-      // Find available admin slot
-      const availableSlot = room.findAvailableAdminSlot();
-      if (!availableSlot) {
-        return socket.emit('room-error', { error: 'All administrator slots are full' });
-      }
-
-      // Get user info
-      const user = await User.findById(userId);
-      if (!user) {
-        return socket.emit('room-error', { error: 'User not found' });
-      }
-
-      // Assign to admin slot
-      const success = room.assignAdministrator(availableSlot, userId, socket.id, user.username);
-      if (!success) {
-        return socket.emit('room-error', { error: 'Failed to assign administrator slot' });
-      }
-
-      await room.save();
-
-      // Join socket room
-      socket.join(roomId);
-
-      console.log(`[CustomRoom] User ${user.username} joined as admin in room ${room.roomCode}`);
-
-      // Broadcast updated room state
-      io.to(roomId).emit('room-state-update', {
-        roomId: room.roomId,
-        roomCode: room.roomCode,
-        teams: room.teams,
-        administrators: room.administrators,
-        totalPlayers: room.totalPlayers,
-        hostId: room.hostId,
-        roomStatus: room.roomStatus,
-        settings: room.settings
-      });
-
-      socket.emit('admin-joined', {
-        ok: true,
-        slotNumber: availableSlot,
-        message: 'Joined as administrator'
-      });
-    } catch (error) {
-      console.error('[CustomRoom] Error joining as admin:', error);
       socket.emit('room-error', { error: error.message });
     }
   });
@@ -2135,7 +2077,6 @@ io.on('connection', (socket) => {
         roomId: room.roomId,
         roomCode: room.roomCode,
         teams: room.teams,
-        administrators: room.administrators,
         totalPlayers: room.totalPlayers,
         hostId: room.hostId,
         roomStatus: room.roomStatus,

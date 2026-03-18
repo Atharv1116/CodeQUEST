@@ -34,9 +34,8 @@ router.post('/create', authenticateToken, async (req, res) => {
             }
         });
 
-        // Initialize teams, slots, and administrators
+        // Initialize teams and slots (includes Team 99 for Admins)
         room.initializeTeams();
-        room.initializeAdministrators();
 
         await room.save();
 
@@ -132,7 +131,6 @@ router.get('/:roomId', authenticateToken, async (req, res) => {
                 roomStatus: room.roomStatus,
                 totalPlayers: room.totalPlayers,
                 teams: room.teams,
-                administrators: room.administrators,
                 settings: room.settings,
                 createdAt: room.createdAt,
                 expiresAt: room.expiresAt

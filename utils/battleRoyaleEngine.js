@@ -118,6 +118,8 @@ async function initBattleRoyale(roomId, customRoom) {
   // Extract teams with at least 1 player
   const teams = [];
   for (const team of customRoom.teams) {
+    if (team.teamNumber === 99) continue; // Exclude Admin Spectator team
+    
     const players = team.slots
       .filter(s => s.playerId)
       .map(s => ({

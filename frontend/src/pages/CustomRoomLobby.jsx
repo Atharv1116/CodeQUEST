@@ -60,7 +60,6 @@ const CustomRoomLobby = () => {
                         roomStatus: data.roomStatus || 'waiting',
                         maxTeams: data.maxTeams || 10,
                         maxPlayersPerTeam: data.maxPlayersPerTeam || 5,
-                        administrators: data.administrators || [],
                         settings: data.settings || { difficulty: 'medium' }
                     };
                 }
@@ -69,7 +68,6 @@ const CustomRoomLobby = () => {
                     teams: data.teams,
                     totalPlayers: data.totalPlayers,
                     hostId: data.hostId || prev.hostId,
-                    administrators: data.administrators || prev.administrators,
                     settings: data.settings || prev.settings
                 };
             });
@@ -221,12 +219,17 @@ const CustomRoomLobby = () => {
     };
 
     const handleJoinAsAdmin = () => {
-        if (!socket || !user) return;
-
-        socket.emit('join-as-admin', {
-            roomId,
-            userId: user.id
-        });
+        if (!socket || !user || !room) return;
+        
+        const adminTeam = room.teams.find(t => t.teamNumber === 99);
+        if (!adminTeam) return;
+        
+        const emptySlot = adminTeam.slots.find(s => !s.playerId && !s.isLocked);
+        if (emptySlot) {
+            handleSlotClick(99, emptySlot.slotNumber, emptySlot);
+        } else {
+            alert('Administrator slots are full!');
+        }
     };
 
     if (loading) {
@@ -355,19 +358,23 @@ const CustomRoomLobby = () => {
                         </button>
                     </div>
                     <div className="grid grid-cols-5 gap-3">
-                        {room.administrators && room.administrators.map((admin) => (
-                            <AdminSlot key={admin.slotNumber} admin={admin} />
-                        ))}
-                        {/* Render empty slots if less than 5 admins */}
-                        {Array.from({ length: Math.max(0, 5 - (room.administrators?.length || 0)) }).map((_, index) => (
-                            <AdminSlot key={`empty-${index}`} admin={{ slotNumber: (room.administrators?.length || 0) + index + 1 }} />
+                        {room.teams?.find(t => t.teamNumber === 99)?.slots.map((slot) => (
+                            <PlayerSlot
+                                key={slot.slotNumber}
+                                slot={slot}
+                                teamNumber={99}
+                                onClick={() => handleSlotClick(99, slot.slotNumber, slot)}
+                                isMySlot={mySlot?.teamNumber === 99 && mySlot?.slotNumber === slot.slotNumber}
+                                isHost={slot.playerId === room.hostId}
+                                canClick={room.roomStatus === 'waiting' && !slot.playerId && !slot.isLocked}
+                            />
                         ))}
                     </div>
                 </motion.div>
 
                 {/* Teams Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                    {room.teams && room.teams.map((team) => (
+                    {room.teams && room.teams.filter(t => t.teamNumber !== 99).map((team) => (
                         <TeamCard
                             key={team.teamNumber}
                             team={team}
@@ -419,32 +426,6 @@ const CustomRoomLobby = () => {
     );
 };
 
-const AdminSlot = ({ admin }) => {
-    if (!admin.adminId) {
-        return (
-            <div className="p-4 rounded-lg border-2 border-dashed border-blue-600/50 bg-blue-900/20 text-center">
-                <div className="text-blue-400 text-sm">Slot {admin.slotNumber}</div>
-                <div className="text-blue-500/50 text-xs mt-1">Empty</div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="p-4 rounded-lg border-2 border-blue-500 bg-blue-900/40">
-            <div className="flex flex-col items-center gap-2">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold">
-                    {admin.username?.[0]?.toUpperCase() || '?'}
-                </div>
-                <div className="text-center">
-                    <div className="text-white text-sm font-medium truncate flex items-center gap-1 justify-center">
-                        {admin.username || 'Admin'}
-                        <Eye className="w-3 h-3 text-blue-400" />
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 const SettingsModal = ({ room, onClose, onUpdate }) => {
     const [difficulty, setDifficulty] = useState(room.settings?.difficulty || 'medium');

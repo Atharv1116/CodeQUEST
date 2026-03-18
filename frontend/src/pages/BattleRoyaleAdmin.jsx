@@ -1,14 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
-import Editor from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Users, Clock, Send, Play, Shield, Skull, Crown, ChevronRight, Award, Zap } from 'lucide-react';
+import { Trophy, Users, Clock, Shield, Skull, Crown, ChevronRight, Award, Zap, Eye } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-const BattleRoyaleMatch = () => {
+const BattleRoyaleAdmin = () => {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const socket = useSocket();
@@ -16,20 +15,12 @@ const BattleRoyaleMatch = () => {
 
   // ── State ──────────────────────────────────────────────
   const [question, setQuestion] = useState(null);
-  const [code, setCode] = useState('# Write your code here\n');
-  const [languageId, setLanguageId] = useState(71); // Python
-  const [output, setOutput] = useState('');
   const [round, setRound] = useState(1);
   const [totalRounds, setTotalRounds] = useState(3);
   const [timeLeft, setTimeLeft] = useState(300);
   const [leaderboard, setLeaderboard] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [myTeam, setMyTeam] = useState(null);
   const [eliminationSchedule, setEliminationSchedule] = useState([]);
-  const [evaluating, setEvaluating] = useState(false);
-  const [editorLocked, setEditorLocked] = useState(false);
   const [matchStatus, setMatchStatus] = useState('active'); // active | between-rounds | finished
-  const [mySolved, setMySolved] = useState(false);
 
   // Round results overlay
   const [showRoundResults, setShowRoundResults] = useState(false);
@@ -40,17 +31,6 @@ const BattleRoyaleMatch = () => {
 
   // Reconnection flag
   const hasRecovered = useRef(false);
-
-  // ── Find my team ──────────────────────────────────────
-  const findMyTeam = useCallback((teamsList) => {
-    if (!user || !teamsList) return null;
-    for (const team of teamsList) {
-      if (team.players?.some(p => p.userId === user.id)) {
-        return team.teamNumber;
-      }
-    }
-    return null;
-  }, [user]);
 
   // ── State recovery on mount ───────────────────────────
   useEffect(() => {
@@ -72,17 +52,15 @@ const BattleRoyaleMatch = () => {
           if (data.currentRound) setRound(data.currentRound);
           if (data.totalRounds) setTotalRounds(data.totalRounds);
           if (data.timerRemaining != null) setTimeLeft(data.timerRemaining);
-          if (data.teams) setTeams(data.teams);
           if (data.leaderboard) setLeaderboard(data.leaderboard);
           if (data.eliminationSchedule) setEliminationSchedule(data.eliminationSchedule);
-          if (data.myTeam) setMyTeam(data.myTeam);
           if (data.status) setMatchStatus(data.status);
           if (data.status === 'finished' && data.finalRankings) {
             setFinalResults({ finalRankings: data.finalRankings, winnerTeam: data.winnerTeam });
           }
         }
       } catch (err) {
-        console.error('[BRMatch] State recovery failed:', err);
+        console.error('[BRAdmin] State recovery failed:', err);
       }
     };
     recoverState();
@@ -97,13 +75,9 @@ const BattleRoyaleMatch = () => {
       setRound(data.round || 1);
       setTotalRounds(data.totalRounds || 3);
       setTimeLeft(data.timerDuration || 300);
-      setTeams(data.teams || []);
       setLeaderboard(data.leaderboard || []);
       setEliminationSchedule(data.eliminationSchedule || []);
-      setMyTeam(findMyTeam(data.teams));
       setMatchStatus('active');
-      setMySolved(false);
-      setEditorLocked(false);
       setShowRoundResults(false);
     };
 
@@ -113,7 +87,6 @@ const BattleRoyaleMatch = () => {
 
     const onRoundEnded = (data) => {
       setShowRoundResults(true);
-      setEditorLocked(true);
       setRoundResults(data);
       setLeaderboard(data.leaderboard || []);
       setMatchStatus('between-rounds');
@@ -127,15 +100,10 @@ const BattleRoyaleMatch = () => {
       setTimeLeft(data.timerDuration || 300);
       setLeaderboard(data.leaderboard || []);
       setMatchStatus('active');
-      setEditorLocked(false);
-      setMySolved(false);
-      setOutput('');
-      setCode('# Write your code here\n');
     };
 
     const onMatchFinished = (data) => {
       setMatchStatus('finished');
-      setEditorLocked(true);
       setShowRoundResults(false);
       setFinalResults(data);
     };
@@ -146,48 +114,12 @@ const BattleRoyaleMatch = () => {
       }
     };
 
-    const onEvaluationStarted = () => {
-      setEvaluating(true);
-    };
-
-    const onEvaluationResult = (data) => {
-      setEvaluating(false);
-      if (!data.ok) {
-        setOutput(`❌ Error: ${data.message}`);
-        return;
-      }
-      const d = data.details || {};
-      if (data.isRun) {
-        setOutput(
-          d.correct
-            ? `✅ Sample test passed!\n\nOutput:\n${d.stdout || '(empty)'}`
-            : `❌ Wrong output\n\nExpected: (see problem)\nGot: ${d.stdout || '(empty)'}${d.stderr ? `\n\nStderr:\n${d.stderr}` : ''}${d.compile_output ? `\n\nCompiler:\n${d.compile_output}` : ''}`
-        );
-      } else {
-        if (data.correct) {
-          setOutput(`✅ Correct! Your solution has been accepted.\nTime: ${d.time || '—'}s | Memory: ${d.memory || '—'}KB`);
-          setMySolved(true);
-        } else {
-          setOutput(
-            `❌ Wrong Answer (Attempt ${data.attempt || '?'})\n\nStatus: ${d.status || 'Wrong Answer'}${d.stderr ? `\nStderr: ${d.stderr}` : ''}${d.compile_output ? `\nCompiler: ${d.compile_output}` : ''}`
-          );
-        }
-      }
-    };
-
-    const onMatchLocked = () => {
-      setEditorLocked(true);
-    };
-
     socket.on('br-match-started', onMatchStarted);
     socket.on('br-leaderboard-update', onLeaderboardUpdate);
     socket.on('br-round-ended', onRoundEnded);
     socket.on('br-round-started', onRoundStarted);
     socket.on('br-match-finished', onMatchFinished);
     socket.on('timer-tick', onTimerTick);
-    socket.on('evaluation-started', onEvaluationStarted);
-    socket.on('evaluation-result', onEvaluationResult);
-    socket.on('match-locked', onMatchLocked);
 
     return () => {
       socket.off('br-match-started', onMatchStarted);
@@ -196,32 +128,8 @@ const BattleRoyaleMatch = () => {
       socket.off('br-round-started', onRoundStarted);
       socket.off('br-match-finished', onMatchFinished);
       socket.off('timer-tick', onTimerTick);
-      socket.off('evaluation-started', onEvaluationStarted);
-      socket.off('evaluation-result', onEvaluationResult);
-      socket.off('match-locked', onMatchLocked);
     };
-  }, [socket, roomId, findMyTeam]);
-
-  // ── Actions ───────────────────────────────────────────
-  const runCode = () => {
-    if (!code.trim() || evaluating || editorLocked) return;
-    setEvaluating(true);
-    setOutput('Running on sample tests...');
-    socket.emit('submit-code', {
-      roomId, code, language_id: languageId,
-      isSubmit: false
-    });
-  };
-
-  const submitCode = () => {
-    if (!code.trim() || evaluating || editorLocked || mySolved) return;
-    setEvaluating(true);
-    setOutput('Submitting for evaluation...');
-    socket.emit('submit-code', {
-      roomId, code, language_id: languageId,
-      isSubmit: true
-    });
-  };
+  }, [socket, roomId]);
 
   // ── Timer formatting ──────────────────────────────────
   const formatTime = (s) => {
@@ -234,7 +142,6 @@ const BattleRoyaleMatch = () => {
 
   // ── FINAL RESULTS SCREEN ──────────────────────────────
   if (matchStatus === 'finished' && finalResults) {
-    const isWinner = finalResults.winnerTeam === myTeam;
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center p-4">
         <motion.div
@@ -248,15 +155,13 @@ const BattleRoyaleMatch = () => {
               animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              <Trophy className={`mx-auto mb-4 ${isWinner ? 'text-yellow-400' : 'text-gray-400'}`} size={80} />
+              <Trophy className="mx-auto mb-4 text-yellow-400" size={80} />
             </motion.div>
             <h1 className="text-5xl font-bold text-white mb-2">
-              {isWinner ? '🏆 Your Team Won!' : 'Battle Royale Complete'}
+              Tournament Complete
             </h1>
             <p className="text-xl text-gray-300">
-              {isWinner
-                ? 'Congratulations! Your team dominated the competition!'
-                : `Team ${finalResults.winnerTeam} takes the crown!`}
+              Team {finalResults.winnerTeam} takes the crown!
             </p>
           </div>
 
@@ -279,8 +184,6 @@ const BattleRoyaleMatch = () => {
                       ? 'bg-gradient-to-r from-gray-400/20 to-gray-300/20 border border-gray-400'
                       : team.rank === 3
                       ? 'bg-gradient-to-r from-orange-700/20 to-amber-700/20 border border-orange-600'
-                      : team.teamNumber === myTeam
-                      ? 'bg-purple-600/20 border border-purple-500'
                       : 'bg-gray-800/50 border border-gray-700'
                   }`}
                 >
@@ -298,9 +201,6 @@ const BattleRoyaleMatch = () => {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-white font-bold text-lg">Team {team.teamNumber}</span>
-                      {team.teamNumber === myTeam && (
-                        <span className="px-2 py-0.5 bg-purple-600 rounded text-xs text-white font-semibold">YOU</span>
-                      )}
                       {team.rank === 1 && <Crown className="w-5 h-5 text-yellow-400" />}
                     </div>
                     <div className="text-sm text-gray-400 mt-1">
@@ -333,7 +233,7 @@ const BattleRoyaleMatch = () => {
               onClick={() => navigate('/battle-royale-mode')}
               className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl font-semibold transition-all hover:scale-105"
             >
-              Return to Lobby
+              Exit Spectator Mode
             </button>
           </motion.div>
         </motion.div>
@@ -341,17 +241,17 @@ const BattleRoyaleMatch = () => {
     );
   }
 
-  // ── MAIN MATCH UI ─────────────────────────────────────
+  // ── MAIN SPECTATOR UI ─────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900/20 to-gray-900">
       {/* Top Bar */}
       <div className="bg-gray-900/80 backdrop-blur-sm border-b border-gray-700 px-4 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           {/* Round Info */}
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-yellow-400" />
-              <span className="text-white font-bold text-lg">Round {round}</span>
+              <Eye className="w-5 h-5 text-blue-400" />
+              <span className="text-white font-bold text-lg">Spectacting Round {round}</span>
               <span className="text-gray-400 text-sm">of {totalRounds}</span>
             </div>
             {/* Elimination info */}
@@ -373,23 +273,22 @@ const BattleRoyaleMatch = () => {
             <span>{formatTime(timeLeft)}</span>
           </div>
 
-          {/* My Team Badge */}
-          {myTeam && (
-            <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border ${mySolved ? 'bg-green-900/40 border-green-500/50' : 'bg-purple-900/40 border-purple-500/50'}`}>
-              <Shield className={`w-5 h-5 ${mySolved ? 'text-green-400' : 'text-purple-400'}`} />
-              <span className="text-white font-bold text-lg tracking-wide">Team {myTeam} <span className="text-sm font-normal text-gray-300 ml-1">(You)</span></span>
-              {mySolved && <span className="text-green-400 font-semibold ml-2">✅ Solved</span>}
-            </div>
-          )}
+          {/* Admin Badge */}
+          <div className="flex items-center gap-2">
+            <Shield className="w-5 h-5 text-blue-400" />
+            <span className="text-white font-semibold">Administrator</span>
+          </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-4">
-        <div className="grid lg:grid-cols-4 gap-4">
-          {/* Left: Question + Editor (3 cols) */}
-          <div className="lg:col-span-3 space-y-4">
-            {/* Question Panel */}
-            <div className="bg-gray-800/60 backdrop-blur-sm rounded-xl p-5 border border-gray-700">
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Left: Question View */}
+          <div className="lg:col-span-1 space-y-4">
+            <div className="bg-gray-800/60 backdrop-blur-sm rounded-xl p-5 border border-gray-700 h-[calc(100vh-140px)] overflow-y-auto">
+              <h3 className="text-lg font-bold text-gray-300 mb-4 border-b border-gray-700 pb-2">
+                Current Problem
+              </h3>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-xl font-bold text-white">
                   {question?.title || 'Loading question...'}
@@ -408,7 +307,7 @@ const BattleRoyaleMatch = () => {
                 {question?.description || ''}
               </p>
               {question && (
-                <div className="mt-4 grid md:grid-cols-2 gap-3">
+                <div className="mt-4 space-y-3">
                   <div className="bg-gray-900/50 p-3 rounded-lg">
                     <div className="text-xs text-gray-400 mb-1 font-semibold">Sample Input</div>
                     <pre className="text-cyan-400 text-sm">{question.sampleInput || '—'}</pre>
@@ -420,97 +319,43 @@ const BattleRoyaleMatch = () => {
                 </div>
               )}
             </div>
-
-            {/* Language Selector + Editor */}
-            <div className="bg-gray-800/60 backdrop-blur-sm rounded-xl border border-gray-700 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
-                <div className="flex items-center gap-2">
-                  <select
-                    value={languageId}
-                    onChange={(e) => setLanguageId(Number(e.target.value))}
-                    disabled={editorLocked}
-                    className="bg-gray-700 text-white text-sm rounded px-3 py-1.5 border border-gray-600 focus:border-cyan-500 outline-none"
-                  >
-                    <option value={71}>Python 3</option>
-                    <option value={62}>Java</option>
-                    <option value={54}>C++</option>
-                    <option value={63}>JavaScript</option>
-                  </select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={runCode}
-                    disabled={evaluating || editorLocked}
-                    className="px-4 py-1.5 bg-gray-600 hover:bg-gray-500 text-white rounded text-sm font-medium transition disabled:opacity-40 flex items-center gap-1"
-                  >
-                    <Play className="w-3.5 h-3.5" /> Run
-                  </button>
-                  <button
-                    onClick={submitCode}
-                    disabled={evaluating || editorLocked || mySolved}
-                    className={`px-4 py-1.5 rounded text-sm font-medium transition flex items-center gap-1 ${
-                      mySolved
-                        ? 'bg-green-700 text-green-200 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white disabled:opacity-40'
-                    }`}
-                  >
-                    <Send className="w-3.5 h-3.5" /> {mySolved ? 'Solved ✅' : 'Submit'}
-                  </button>
-                </div>
-              </div>
-              <Editor
-                height="350px"
-                defaultLanguage="python"
-                language={languageId === 71 ? 'python' : languageId === 62 ? 'java' : languageId === 54 ? 'cpp' : 'javascript'}
-                value={code}
-                onChange={(value) => setCode(value || '')}
-                theme="vs-dark"
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 14,
-                  wordWrap: 'on',
-                  readOnly: editorLocked,
-                  scrollBeyondLastLine: false
-                }}
-              />
-            </div>
-
-            {/* Output */}
-            <div className="bg-gray-800/60 backdrop-blur-sm rounded-xl p-4 border border-gray-700">
-              <h3 className="text-sm font-semibold text-gray-400 mb-2">Output</h3>
-              <pre className="bg-gray-900/50 p-3 rounded-lg text-sm text-gray-300 min-h-[60px] whitespace-pre-wrap overflow-x-auto">
-                {output || 'Run or submit your code to see results...'}
-              </pre>
-            </div>
           </div>
 
-          {/* Right: Leaderboard (1 col) */}
-          <div className="space-y-4">
-            <div className="bg-gray-800/60 backdrop-blur-sm rounded-xl p-4 border border-gray-700 sticky top-4">
-              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <Users className="w-5 h-5 text-cyan-400" />
-                Team Leaderboard
-              </h3>
-              <div className="space-y-2">
+          {/* Right: Live Leaderboard */}
+          <div className="lg:col-span-2">
+            <div className="bg-gray-800/60 backdrop-blur-sm rounded-xl p-6 border border-gray-700 h-[calc(100vh-140px)] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-white flex items-center gap-3">
+                  <Users className="w-7 h-7 text-cyan-400" />
+                  Live Team Leaderboard
+                </h3>
+                <div className="text-sm text-gray-400">
+                  {leaderboard.filter(t => !t.eliminated).length} Teams Alive
+                </div>
+              </div>
+
+              <div className="space-y-3">
                 {leaderboard
                   .filter(t => !t.eliminated)
                   .map((team, idx) => (
                     <motion.div
                       key={team.teamNumber}
                       layout
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className={`p-3 rounded-lg transition-all ${
-                        team.teamNumber === myTeam
-                          ? 'bg-purple-600/30 border-2 border-purple-500'
-                          : team.rank === 1
-                          ? 'bg-yellow-600/20 border border-yellow-600/50'
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className={`p-4 rounded-xl transition-all ${
+                        team.rank === 1
+                          ? 'bg-yellow-600/20 border-2 border-yellow-600/50'
+                          : team.rank === 2
+                          ? 'bg-gray-400/10 border-2 border-gray-500/30'
+                          : team.rank === 3
+                          ? 'bg-orange-600/10 border-2 border-orange-600/30'
                           : 'bg-gray-700/50 border border-gray-600/30'
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-4">
+                          <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
                             team.rank === 1 ? 'bg-yellow-500 text-black' :
                             team.rank === 2 ? 'bg-gray-400 text-black' :
                             team.rank === 3 ? 'bg-orange-600 text-white' :
@@ -518,29 +363,35 @@ const BattleRoyaleMatch = () => {
                           }`}>
                             {team.rank}
                           </span>
-                          <span className="text-white font-semibold text-sm">
-                            Team {team.teamNumber}
-                            {team.teamNumber === myTeam && ' ⭐'}
+                          <div>
+                            <span className="text-white font-bold text-lg">
+                              Team {team.teamNumber}
+                            </span>
+                            <div className="text-xs text-gray-400 mt-0.5">
+                              {(team.players || []).map(p => p.username).join(', ')}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <span className="text-cyan-400 font-bold text-lg">
+                            {team.solvesCount}/{team.totalPlayers} solved
                           </span>
+                          {team.totalTimeMs > 0 && (
+                            <span className="text-gray-400 text-sm">
+                              {(team.totalTimeMs / 1000).toFixed(1)}s total time
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-cyan-400 font-mono">
-                          {team.solvesCount}/{team.totalPlayers} solved
-                        </span>
-                        {team.totalTimeMs > 0 && (
-                          <span className="text-gray-400">
-                            {(team.totalTimeMs / 1000).toFixed(1)}s
-                          </span>
-                        )}
-                      </div>
-                      {/* Player solve indicators */}
+                      
+                      {/* Player solve timeline */}
                       {team.playerSolves && team.playerSolves.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap gap-1">
+                        <div className="mt-3 pt-3 border-t border-gray-600/50 flex flex-wrap gap-2">
                           {team.playerSolves.map((ps, i) => (
-                            <span key={i} className="px-1.5 py-0.5 bg-green-600/30 rounded text-[10px] text-green-400">
-                              ✅ {(ps.submissionTimeMs / 1000).toFixed(0)}s
-                            </span>
+                            <div key={i} className="px-2 py-1 bg-green-500/20 border border-green-500/30 rounded flex items-center gap-1.5">
+                              <span className="text-green-400 font-semibold text-xs">✅ {ps.username}</span>
+                              <span className="text-green-500/70 text-[10px]">{(ps.submissionTimeMs / 1000).toFixed(1)}s</span>
+                            </div>
                           ))}
                         </div>
                       )}
@@ -549,25 +400,29 @@ const BattleRoyaleMatch = () => {
 
                 {/* Eliminated teams */}
                 {leaderboard.filter(t => t.eliminated).length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-gray-700">
-                    <p className="text-xs text-gray-500 mb-2 font-semibold flex items-center gap-1">
-                      <Skull className="w-3 h-3" /> Eliminated
-                    </p>
-                    {leaderboard
-                      .filter(t => t.eliminated)
-                      .map(team => (
-                        <div key={team.teamNumber} className="p-2 rounded-lg bg-red-900/20 border border-red-800/30 mb-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-red-400/70 text-xs font-medium">
-                              Team {team.teamNumber}
-                              {team.teamNumber === myTeam && ' (You)'}
-                            </span>
-                            <span className="text-red-500/50 text-[10px]">
-                              R{team.eliminatedInRound}
+                  <div className="mt-6 pt-6 border-t border-gray-700">
+                    <h4 className="text-sm text-red-400/80 mb-3 font-semibold flex items-center gap-2">
+                      <Skull className="w-4 h-4" /> Eliminated Teams
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {leaderboard
+                        .filter(t => t.eliminated)
+                        .map(team => (
+                          <div key={team.teamNumber} className="p-3 rounded-lg bg-red-900/10 border border-red-800/30 flex justify-between items-center">
+                            <div>
+                                <span className="text-red-400/80 text-sm font-medium block">
+                                Team {team.teamNumber}
+                                </span>
+                                <span className="text-red-500/50 text-xs">
+                                {(team.players || []).map(p => p.username).join(', ')}
+                                </span>
+                            </div>
+                            <span className="text-red-500/70 text-xs font-semibold px-2 py-1 bg-red-900/40 rounded">
+                              Out R{team.eliminatedInRound}
                             </span>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -613,19 +468,12 @@ const BattleRoyaleMatch = () => {
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: idx * 0.1 }}
-                        className={`p-3 rounded-lg flex items-center justify-between ${
-                          team.teamNumber === myTeam
-                            ? 'bg-green-600/30 border border-green-500'
-                            : 'bg-green-900/20 border border-green-700/30'
-                        }`}
+                        className={`p-3 rounded-lg flex items-center justify-between bg-green-900/20 border border-green-700/30`}
                       >
                         <div className="flex items-center gap-2">
                           <span className="text-white font-semibold">
                             #{team.rank} Team {team.teamNumber}
                           </span>
-                          {team.teamNumber === myTeam && (
-                            <span className="px-2 py-0.5 bg-green-600 rounded text-xs text-white">YOU</span>
-                          )}
                         </div>
                         <span className="text-green-400 text-sm">
                           {team.solvesCount} solves • {(team.totalTimeMs / 1000).toFixed(1)}s
@@ -649,19 +497,12 @@ const BattleRoyaleMatch = () => {
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: idx * 0.1 + 0.3 }}
-                        className={`p-3 rounded-lg flex items-center justify-between ${
-                          team.teamNumber === myTeam
-                            ? 'bg-red-600/30 border border-red-500'
-                            : 'bg-red-900/20 border border-red-700/30'
-                        }`}
+                        className={`p-3 rounded-lg flex items-center justify-between bg-red-900/20 border border-red-700/30`}
                       >
                         <div className="flex items-center gap-2">
                           <span className="text-gray-300 font-semibold">
                             #{team.rank} Team {team.teamNumber}
                           </span>
-                          {team.teamNumber === myTeam && (
-                            <span className="px-2 py-0.5 bg-red-600 rounded text-xs text-white">YOU</span>
-                          )}
                         </div>
                         <span className="text-red-400 text-sm">
                           {team.solvesCount} solves • {(team.totalTimeMs / 1000).toFixed(1)}s
@@ -685,4 +526,4 @@ const BattleRoyaleMatch = () => {
   );
 };
 
-export default BattleRoyaleMatch;
+export default BattleRoyaleAdmin;
