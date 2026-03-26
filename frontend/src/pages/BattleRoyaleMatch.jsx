@@ -33,6 +33,11 @@ const BattleRoyaleMatch = () => {
   // Round results overlay
   const [showRoundResults, setShowRoundResults] = useState(false);
   const [roundResults, setRoundResults] = useState(null);
+  const [waitingForAdmin, setWaitingForAdmin] = useState(false);
+
+  // Countdown overlay (when admin starts next round)
+  const [showCountdown, setShowCountdown] = useState(false);
+  const [countdownSeconds, setCountdownSeconds] = useState(5);
 
   // Final results
   const [finalResults, setFinalResults] = useState(null);
@@ -114,6 +119,8 @@ const BattleRoyaleMatch = () => {
       setRoundResults(data);
       setLeaderboard(data.leaderboard || []);
       setMatchStatus('between-rounds');
+      // Fix 15: Track whether we're waiting for admin
+      setWaitingForAdmin(!!data.waitingForAdmin);
     };
 
     const onRoundStarted = (data) => {
@@ -126,8 +133,12 @@ const BattleRoyaleMatch = () => {
       setMatchStatus('active');
       setEditorLocked(false);
       setMySolved(false);
+      // Fix 17: Complete state reset
+      setEvaluating(false);
       setOutput('');
       setCode('# Write your code here\n');
+      setWaitingForAdmin(false);
+      setShowCountdown(false);
     };
 
     const onMatchFinished = (data) => {
@@ -176,6 +187,24 @@ const BattleRoyaleMatch = () => {
       setEditorLocked(true);
     };
 
+    // Fix 16: Listen for admin-triggered countdown
+    const onCountdown = (data) => {
+      if (data.roomId === roomId) {
+        setShowCountdown(true);
+        setCountdownSeconds(data.seconds || 5);
+        // Tick down the countdown
+        let remaining = data.seconds || 5;
+        const countdownInterval = setInterval(() => {
+          remaining -= 1;
+          setCountdownSeconds(remaining);
+          if (remaining <= 0) {
+            clearInterval(countdownInterval);
+            setShowCountdown(false);
+          }
+        }, 1000);
+      }
+    };
+
     socket.on('br-match-started', onMatchStarted);
     socket.on('br-leaderboard-update', onLeaderboardUpdate);
     socket.on('br-round-ended', onRoundEnded);
@@ -185,6 +214,7 @@ const BattleRoyaleMatch = () => {
     socket.on('evaluation-started', onEvaluationStarted);
     socket.on('evaluation-result', onEvaluationResult);
     socket.on('match-locked', onMatchLocked);
+    socket.on('br-countdown', onCountdown);
 
     return () => {
       socket.off('br-match-started', onMatchStarted);
@@ -196,6 +226,7 @@ const BattleRoyaleMatch = () => {
       socket.off('evaluation-started', onEvaluationStarted);
       socket.off('evaluation-result', onEvaluationResult);
       socket.off('match-locked', onMatchLocked);
+      socket.off('br-countdown', onCountdown);
     };
   }, [socket, roomId]);
 
@@ -694,7 +725,7 @@ const BattleRoyaleMatch = () => {
                           )}
                         </div>
                         <span className="text-green-400 text-sm">
-                          {team.solvesCount} solves • {(team.totalTimeMs / 1000).toFixed(1)}s
+                          {team.solvesCount} solves • {((team.totalTimeMs || 0) / 1000).toFixed(1)}s
                         </span>
                       </motion.div>
                     ))}
@@ -730,7 +761,7 @@ const BattleRoyaleMatch = () => {
                           )}
                         </div>
                         <span className="text-red-400 text-sm">
-                          {team.solvesCount} solves • {(team.totalTimeMs / 1000).toFixed(1)}s
+                          {team.solvesCount} solves • {((team.totalTimeMs || 0) / 1000).toFixed(1)}s
                         </span>
                       </motion.div>
                     ))}
@@ -738,11 +769,43 @@ const BattleRoyaleMatch = () => {
                 </div>
               )}
 
+              {/* Fix 15: Show appropriate waiting message */}
               {!roundResults.isFinalRound && (
-                <p className="text-center text-gray-500 mt-6 text-sm animate-pulse">
-                  Next round starting soon...
+                <p className="text-center text-gray-500 mt-6 text-sm">
+                  {waitingForAdmin
+                    ? '⏳ Waiting for admin to start the next round...'
+                    : <span className="animate-pulse">Next round starting soon...</span>}
                 </p>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Fix 16: Countdown Overlay */}
+      <AnimatePresence>
+        {showCountdown && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[60]"
+          >
+            <motion.div
+              initial={{ scale: 0.5 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.5 }}
+              className="text-center"
+            >
+              <p className="text-2xl text-gray-300 mb-4">Next round starting in</p>
+              <motion.p
+                key={countdownSeconds}
+                initial={{ scale: 1.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="text-8xl font-extrabold text-cyan-400"
+              >
+                {countdownSeconds}
+              </motion.p>
             </motion.div>
           </motion.div>
         )}

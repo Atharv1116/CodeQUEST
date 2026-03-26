@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Users, Clock, Shield, Skull, Crown, ChevronRight, Award, Zap, Eye } from 'lucide-react';
+import { Trophy, Users, Clock, Shield, Skull, Crown, ChevronRight, Award, Zap, Eye, Play } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -28,6 +28,14 @@ const BattleRoyaleAdmin = () => {
 
   // Final results
   const [finalResults, setFinalResults] = useState(null);
+
+  // Fix 18: Admin controls
+  const [waitingForAdmin, setWaitingForAdmin] = useState(false);
+  const [startingNextRound, setStartingNextRound] = useState(false);
+
+  // Fix 19: Countdown overlay
+  const [showCountdown, setShowCountdown] = useState(false);
+  const [countdownSeconds, setCountdownSeconds] = useState(5);
 
   // Reconnection flag
   const hasRecovered = useRef(false);
@@ -90,6 +98,9 @@ const BattleRoyaleAdmin = () => {
       setRoundResults(data);
       setLeaderboard(data.leaderboard || []);
       setMatchStatus('between-rounds');
+      // Fix 18: Track admin wait state
+      setWaitingForAdmin(!!data.waitingForAdmin);
+      setStartingNextRound(false);
     };
 
     const onRoundStarted = (data) => {
@@ -100,6 +111,9 @@ const BattleRoyaleAdmin = () => {
       setTimeLeft(data.timerDuration || 300);
       setLeaderboard(data.leaderboard || []);
       setMatchStatus('active');
+      setWaitingForAdmin(false);
+      setStartingNextRound(false);
+      setShowCountdown(false);
     };
 
     const onMatchFinished = (data) => {
@@ -114,12 +128,30 @@ const BattleRoyaleAdmin = () => {
       }
     };
 
+    // Fix 19: Countdown listener
+    const onCountdown = (data) => {
+      if (data.roomId === roomId) {
+        setShowCountdown(true);
+        setCountdownSeconds(data.seconds || 5);
+        let remaining = data.seconds || 5;
+        const countdownInterval = setInterval(() => {
+          remaining -= 1;
+          setCountdownSeconds(remaining);
+          if (remaining <= 0) {
+            clearInterval(countdownInterval);
+            setShowCountdown(false);
+          }
+        }, 1000);
+      }
+    };
+
     socket.on('br-match-started', onMatchStarted);
     socket.on('br-leaderboard-update', onLeaderboardUpdate);
     socket.on('br-round-ended', onRoundEnded);
     socket.on('br-round-started', onRoundStarted);
     socket.on('br-match-finished', onMatchFinished);
     socket.on('timer-tick', onTimerTick);
+    socket.on('br-countdown', onCountdown);
 
     return () => {
       socket.off('br-match-started', onMatchStarted);
@@ -128,6 +160,7 @@ const BattleRoyaleAdmin = () => {
       socket.off('br-round-started', onRoundStarted);
       socket.off('br-match-finished', onMatchFinished);
       socket.off('timer-tick', onTimerTick);
+      socket.off('br-countdown', onCountdown);
     };
   }, [socket, roomId]);
 
@@ -144,6 +177,13 @@ const BattleRoyaleAdmin = () => {
     .filter(t => !t.eliminated)
     .flatMap(t => t.playerSolves || [])
     .sort((a, b) => a.submissionTimeMs - b.submissionTimeMs);
+
+  // Fix 18: Admin action to start next round
+  const handleStartNextRound = () => {
+    if (!socket || startingNextRound) return;
+    setStartingNextRound(true);
+    socket.emit('start-next-round', { roomId, userId: user?.id });
+  };
 
   // ── FINAL RESULTS SCREEN ──────────────────────────────
   if (matchStatus === 'finished' && finalResults) {
@@ -569,10 +609,58 @@ const BattleRoyaleAdmin = () => {
               )}
 
               {!roundResults.isFinalRound && (
-                <p className="text-center text-gray-500 mt-6 text-sm animate-pulse">
-                  Next round starting soon...
-                </p>
+                <div className="mt-6 text-center">
+                  {/* Fix 18: Admin-only Start Next Round button */}
+                  {waitingForAdmin && !startingNextRound && (
+                    <button
+                      onClick={handleStartNextRound}
+                      className="px-8 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white rounded-xl font-semibold transition-all hover:scale-105 flex items-center gap-2 mx-auto mb-3"
+                    >
+                      <Play className="w-5 h-5" />
+                      Start Next Round
+                    </button>
+                  )}
+                  {startingNextRound && (
+                    <p className="text-cyan-400 text-sm animate-pulse">
+                      Starting next round...
+                    </p>
+                  )}
+                  {!waitingForAdmin && !startingNextRound && (
+                    <p className="text-gray-500 text-sm animate-pulse">
+                      Next round starting soon...
+                    </p>
+                  )}
+                </div>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Fix 19: Countdown Overlay */}
+      <AnimatePresence>
+        {showCountdown && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[60]"
+          >
+            <motion.div
+              initial={{ scale: 0.5 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.5 }}
+              className="text-center"
+            >
+              <p className="text-2xl text-gray-300 mb-4">Next round starting in</p>
+              <motion.p
+                key={countdownSeconds}
+                initial={{ scale: 1.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="text-8xl font-extrabold text-cyan-400"
+              >
+                {countdownSeconds}
+              </motion.p>
             </motion.div>
           </motion.div>
         )}

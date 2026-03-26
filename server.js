@@ -268,7 +268,11 @@ const submissionLocks = new Set(); // socketId — locked while Judge0 evaluates
 
 // Server-authoritative timer config
 const MATCH_TIME_LIMIT_SECONDS = 1800; // 30 min for 1v1/2v2
-const BATTLE_ROYALE_ROUND_SECONDS = 300;  // 5 min per round
+const BATTLE_ROYALE_ROUND_SECONDS = 300;  // 5 min per round (legacy queue-based BR)
+
+// Per-round durations for custom Battle Royale (in seconds)
+const BR_ROUND_DURATIONS = { 1: 600, 2: 1200, 3: 1800 }; // 10m, 20m, 30m
+const BR_ROUND_DIFFICULTIES = { 1: 'easy', 2: 'medium', 3: 'hard' };
 
 // ---------- Server-Side Timer Authority ----------
 function startMatchTimer(roomId, durationSeconds) {
@@ -918,37 +922,8 @@ io.on('connection', (socket) => {
     });
   }
 
-  // Join room
-  socket.on('join-room', (roomId) => {
-    console.log(`[Server] ${socket.id} joining room:`, roomId);
-    socket.join(roomId);
-    socket.to(roomId).emit('user-joined', socket.id);
-
-    // Send complete match data to player joining the room
-    const question = roomQuestion.get(roomId);
-    const state = roomState.get(roomId);
-
-    console.log(`[Server] Room ${roomId} - Question exists:`, !!question, 'State exists:', !!state);
-
-    if (question && state) {
-      const matchData = {
-        roomId,
-        question,
-        type: state.type || '1v1',
-        // Include team info for 2v2
-        team: state.teams?.blue?.includes(socket.id) ? 'blue' :
-          state.teams?.red?.includes(socket.id) ? 'red' : null,
-        teammates: state.teams?.blue?.includes(socket.id) ? state.teams.blue :
-          state.teams?.red?.includes(socket.id) ? state.teams.red : [],
-        opponents: state.teams?.blue?.includes(socket.id) ? state.teams.red :
-          state.teams?.red?.includes(socket.id) ? state.teams.blue : []
-      };
-      console.log(`[Server] Sending match-found to ${socket.id} with question:`, question.title);
-      socket.emit('match-found', matchData);
-    } else {
-      console.error(`[Server] Cannot send match data - Question: ${!!question}, State: ${!!state}`);
-    }
-  });
+  // NOTE: Duplicate join-room handler REMOVED (was causing match-found re-emit conflicts).
+  // The primary join-room handler at line ~512 handles room joining + state recovery.
 
   // Chat - broadcast to room including sender
   socket.on('send-message', async ({ roomId, message }) => {
@@ -1402,38 +1377,81 @@ io.on('connection', (socket) => {
   function emitMatchFinished1v1(roomId, winnerId, opponentId, state, submitTimeMs) {
     const winnerAttempts = state.playerAttempts?.[winnerId] || 1;
     const loserAttempts = state.playerAttempts?.[opponentId] || 0;
+    const winnerUserId = playerSessions.get(winnerId) || null;
+    const loserUserId = playerSessions.get(opponentId) || null;
+    const question = roomQuestion.get(roomId);
+    const difficulty = question?.difficulty || 'easy';
+
+    // Pre-compute XP so frontend can show immediately
+    const winnerXP = calculateXP('win', difficulty, '1v1');
+    const loserXP = calculateXP('loss', difficulty, '1v1');
+    const winnerCoins = calculateCoins('win', difficulty, '1v1');
+    const loserCoins = calculateCoins('loss', difficulty, '1v1');
+
     const payload = {
       roomId, type: '1v1',
-      winner: winnerId,            // socket ID — frontend checks vs socket.id
-      winnerUserId: playerSessions.get(winnerId) || null,
+      winner: winnerId,            // socket ID (legacy)
+      winnerUserId,                // user ID — reliable for frontend comparison
+      loserUserId,                 // user ID of the loser
       matchId: null,               // backfilled later via 'rating-update'
       draw: false,
       ratingChanges: [],           // backfilled later via 'rating-update'
+      xpChanges: {
+        winner: { xp: winnerXP, coins: winnerCoins },
+        loser: { xp: loserXP, coins: loserCoins }
+      },
       stats: {
         winner: { solveTimeMs: submitTimeMs, attempts: winnerAttempts, accuracy: 100 },
         loser: { solveTimeMs: null, attempts: loserAttempts, accuracy: 0 }
       },
       message: '✅ Correct submission! Match over.'
     };
-    console.log(`[Server] emitMatchFinished1v1 → room ${roomId}, winner=${winnerId}`);
+    console.log(`[Server] emitMatchFinished1v1 → room ${roomId}, winnerUserId=${winnerUserId}, loserUserId=${loserUserId}`);
     io.to(roomId).emit('match-finished', payload);
-    roomState.delete(roomId);
-    roomQuestion.delete(roomId);
+
+    // Delay cleanup so reconnecting clients can still recover state
+    setTimeout(() => {
+      roomState.delete(roomId);
+      roomQuestion.delete(roomId);
+    }, 10000);
+
     return { winnerAttempts, loserAttempts };
   }
 
   // Phase 1: 2v2 immediate emit
   function emitMatchFinished2v2(roomId, teamName, winningTeamSockets, state) {
+    const losingTeamName = teamName === 'red' ? 'blue' : 'red';
+    const winningTeamIds = (state.teamIds || {})[teamName] || [];
+    const losingTeamIds = (state.teamIds || {})[losingTeamName] || [];
+    const question = roomQuestion.get(roomId);
+    const difficulty = question?.difficulty || 'easy';
+
+    // Pre-compute XP
+    const winnerXP = calculateXP('win', difficulty, '2v2');
+    const loserXP = calculateXP('loss', difficulty, '2v2');
+    const winnerCoins = calculateCoins('win', difficulty, '2v2');
+    const loserCoins = calculateCoins('loss', difficulty, '2v2');
+
     const payload = {
       roomId, type: '2v2',
       winner: null, winnerTeam: teamName, winningPlayers: winningTeamSockets,
+      winningTeamIds,              // user IDs of winners
+      losingTeamIds,               // user IDs of losers
       matchId: null, draw: false, ratingChanges: [],
+      xpChanges: {
+        winner: { xp: winnerXP, coins: winnerCoins },
+        loser: { xp: loserXP, coins: loserCoins }
+      },
       message: `✅ Team ${teamName} wins!`
     };
-    console.log(`[Server] emitMatchFinished2v2 → room ${roomId}, team=${teamName}`);
+    console.log(`[Server] emitMatchFinished2v2 → room ${roomId}, team=${teamName}, winnerIds=${winningTeamIds}`);
     io.to(roomId).emit('match-finished', payload);
-    roomState.delete(roomId);
-    roomQuestion.delete(roomId);
+
+    // Delay cleanup
+    setTimeout(() => {
+      roomState.delete(roomId);
+      roomQuestion.delete(roomId);
+    }, 10000);
   }
 
   // Phase 2: background pipeline for 1v1
@@ -2076,6 +2094,53 @@ io.on('connection', (socket) => {
       });
     } catch (error) {
       console.error('[CustomRoom] Error updating settings:', error);
+      socket.emit('room-error', { error: error.message });
+    }
+  });
+
+  // ---------- Admin-Controlled Round Progression ----------
+  socket.on('start-next-round', async ({ roomId, userId }) => {
+    try {
+      // Validate admin/host identity
+      const room = await CustomRoom.findOne({ roomId });
+      if (!room) {
+        return socket.emit('room-error', { error: 'Room not found' });
+      }
+
+      // Check if user is host OR an admin (team 99)
+      const isHost = room.hostId.toString() === userId?.toString();
+      const isAdmin = room.teams.some(t =>
+        t.teamNumber === 99 && t.slots.some(s => s.playerId?.toString() === userId?.toString())
+      );
+
+      if (!isHost && !isAdmin) {
+        return socket.emit('room-error', { error: 'Only the host or admin can start the next round' });
+      }
+
+      // Validate BR state is waiting for admin
+      const brState = brEngine.getBRState(roomId);
+      if (!brState) {
+        return socket.emit('room-error', { error: 'No active Battle Royale match found' });
+      }
+      if (brState.status !== 'waiting-for-admin' && brState.status !== 'between-rounds') {
+        return socket.emit('room-error', { error: `Cannot start next round in state: ${brState.status}` });
+      }
+
+      console.log(`[Server] Admin ${userId} initiating next round for ${roomId}`);
+
+      // Emit 5-second countdown to all players
+      io.to(roomId).emit('br-countdown', {
+        roomId,
+        seconds: 5,
+        message: 'Next round starting in...'
+      });
+
+      // After 5 seconds, start the next round
+      setTimeout(() => {
+        brEngine.adminStartNextRound(roomId);
+      }, 5000);
+    } catch (error) {
+      console.error('[Server] start-next-round error:', error);
       socket.emit('room-error', { error: error.message });
     }
   });

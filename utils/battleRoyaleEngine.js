@@ -65,12 +65,11 @@ async function getRandomQuestion(difficulty = 'easy') {
   }
 }
 
-function difficultyForRound(round, baseDifficulty) {
-  // Escalate difficulty each round
-  const levels = ['easy', 'medium', 'hard'];
-  const baseIdx = levels.indexOf(baseDifficulty || 'easy');
-  const idx = Math.min(levels.length - 1, baseIdx + (round - 1));
-  return levels[idx];
+// Fix 7: Strict difficulty progression regardless of base setting
+const BR_DIFFICULTY_BY_ROUND = { 1: 'easy', 2: 'medium', 3: 'hard' };
+
+function difficultyForRound(round, _baseDifficulty) {
+  return BR_DIFFICULTY_BY_ROUND[round] || 'hard';
 }
 
 function buildEliminationSchedule(teamCount) {
@@ -102,7 +101,9 @@ function buildEliminationSchedule(teamCount) {
 
 // ── Core Functions ──────────────────────────────────────────────
 
-const BR_ROUND_DURATION_SECONDS = 300; // 5 minutes per round
+// Fix 6: Per-round durations (in seconds)
+const BR_ROUND_DURATIONS = { 1: 600, 2: 1200, 3: 1800 }; // 10m, 20m, 30m
+const BR_ROUND_DURATION_SECONDS = 600; // Default fallback (round 1)
 const BR_INTERMISSION_SECONDS = 10;    // 10 seconds between rounds
 
 /**
@@ -158,17 +159,19 @@ async function initBattleRoyale(roomId, customRoom) {
     eliminationSchedule,
     status: 'active', // 'active' | 'between-rounds' | 'finished'
 
-    // Current round data
+    // Current round data — Fix 6: use per-round duration
     roundQuestion: question,
     roundStartedAt: Date.now(),
-    roundDurationSeconds: BR_ROUND_DURATION_SECONDS,
-    roundTimerEndAt: Date.now() + BR_ROUND_DURATION_SECONDS * 1000,
+    roundDurationSeconds: BR_ROUND_DURATIONS[1] || BR_ROUND_DURATION_SECONDS,
+    roundTimerEndAt: Date.now() + (BR_ROUND_DURATIONS[1] || BR_ROUND_DURATION_SECONDS) * 1000,
     roundTimerInterval: null,
 
     // Per-round submission tracking: Map<visitorUserId, { correct, submissionTimeMs, attempt }>
     roundSubmissions: new Map(),
     // Track attempts per player this round
     roundAttempts: new Map(),
+    // Fix 11: Track ALL players who have submitted (correct or incorrect) for early termination
+    roundSubmittedPlayers: new Set(),
 
     // Persisted document ID
     matchDocId: null,
@@ -224,7 +227,8 @@ async function initBattleRoyale(roomId, customRoom) {
     question: sanitizeQuestion(question),
     round: 1,
     totalRounds,
-    timerDuration: BR_ROUND_DURATION_SECONDS,
+    timerDuration: BR_ROUND_DURATIONS[1] || BR_ROUND_DURATION_SECONDS,
+    difficulty: difficultyForRound(1),
     leaderboard,
     eliminationSchedule
   });
@@ -264,8 +268,13 @@ function handleBRSubmission(roomId, socketId, userId, correct, submitTimeMs) {
   const currentAttempts = (state.roundAttempts.get(attemptKey) || 0) + 1;
   state.roundAttempts.set(attemptKey, currentAttempts);
 
+  // Fix 11: Track that this player has submitted (correct or incorrect)
+  if (!state.roundSubmittedPlayers) state.roundSubmittedPlayers = new Set();
+  state.roundSubmittedPlayers.add(attemptKey);
+
   if (!correct) {
-    // Wrong submission — just track attempt, no leaderboard change
+    // Wrong submission — track attempt, check early termination, no leaderboard change
+    checkEarlyTermination(roomId, state);
     return { updated: false, leaderboard: null };
   }
 
@@ -302,24 +311,8 @@ function handleBRSubmission(roomId, socketId, userId, correct, submitTimeMs) {
 
   console.log(`[BREngine] Correct submission: user=${userId}, team=${playerTeam.teamNumber}, time=${submitTimeMs}ms`);
 
-  // Check for early round termination (all active players have solved)
-  const activePlayersCount = state.teams
-    .filter(t => t.status === 'active')
-    .reduce((acc, t) => acc + t.players.length, 0);
-
-  if (state.roundSubmissions.size >= activePlayersCount) {
-    console.log(`[BREngine] All ${activePlayersCount} active players have solved. Terminating round ${state.currentRound} ahead of timer.`);
-    
-    // Clear the existing timer so we don't trigger endBRRound twice
-    const timerId = roundTimers.get(roomId);
-    if (timerId) {
-      clearInterval(timerId);
-      roundTimers.delete(roomId);
-    }
-    
-    // Execute round end immediately
-    endBRRound(roomId);
-  }
+  // Fix 5/8/11: Check for early round termination (all active players have submitted)
+  checkEarlyTermination(roomId, state);
 
   return { updated: true, leaderboard };
 }
@@ -541,7 +534,8 @@ async function endBRRound(roomId) {
       totalTimeMs: t.totalTimeMs,
       rank: t.rank
     })),
-    isFinalRound: advancingTeams.length <= 1 || round >= state.totalRounds
+    isFinalRound: advancingTeams.length <= 1 || round >= state.totalRounds,
+    waitingForAdmin: !(advancingTeams.length <= 1 || round >= state.totalRounds) // non-final rounds wait for admin
   });
 
   console.log(`[BREngine] Round ${round} ended: ${advancingTeams.length} advance, ${eliminatedTeams.length} eliminated`);
@@ -551,14 +545,15 @@ async function endBRRound(roomId) {
     // Wait briefly before showing final results
     setTimeout(() => finishBattleRoyale(roomId), 5000);
   } else {
-    // Wait for intermission, then start next round
-    console.log(`[BREngine] Intermission — next round in ${BR_INTERMISSION_SECONDS}s`);
-    setTimeout(() => startNextBRRound(roomId), BR_INTERMISSION_SECONDS * 1000);
+    // Fix 9: Do NOT auto-start next round. Wait for admin to trigger it.
+    state.status = 'waiting-for-admin';
+    console.log(`[BREngine] Round ${round} ended. Waiting for admin to start next round.`);
   }
 }
 
 /**
- * Start the next round after intermission.
+ * Start the next round — called by admin via adminStartNextRound() or directly.
+ * Fix 10: Ensures complete state reset between rounds.
  */
 async function startNextBRRound(roomId) {
   const state = brStates.get(roomId);
@@ -568,6 +563,9 @@ async function startNextBRRound(roomId) {
   const round = state.currentRound;
   const difficulty = difficultyForRound(round, state.baseDifficulty);
 
+  // Fix 6: Per-round duration
+  const roundDuration = BR_ROUND_DURATIONS[round] || BR_ROUND_DURATION_SECONDS;
+
   // Get new question
   const question = await getRandomQuestion(difficulty);
   state.roundQuestion = question;
@@ -575,11 +573,13 @@ async function startNextBRRound(roomId) {
   // Notify server.js about the new question for submit-code handler
   if (_onQuestionChange) _onQuestionChange(roomId, question);
 
-  // Reset per-round tracking
+  // Fix 10: Complete state reset between rounds
   state.roundSubmissions = new Map();
   state.roundAttempts = new Map();
+  state.roundSubmittedPlayers = new Set();  // Fix 11: reset submitted tracking
   state.roundStartedAt = Date.now();
-  state.roundTimerEndAt = Date.now() + BR_ROUND_DURATION_SECONDS * 1000;
+  state.roundDurationSeconds = roundDuration;
+  state.roundTimerEndAt = Date.now() + roundDuration * 1000;
   state.status = 'active';
 
   const leaderboard = computeTeamLeaderboard(state);
@@ -590,7 +590,8 @@ async function startNextBRRound(roomId) {
     round,
     totalRounds: state.totalRounds,
     question: sanitizeQuestion(question),
-    timerDuration: BR_ROUND_DURATION_SECONDS,
+    timerDuration: roundDuration,
+    difficulty,
     leaderboard,
     activeTeams: state.teams.filter(t => t.status === 'active').map(t => t.teamNumber)
   });
@@ -598,7 +599,7 @@ async function startNextBRRound(roomId) {
   // Start timer
   startRoundTimer(roomId);
 
-  console.log(`[BREngine] Round ${round} started (difficulty: ${difficulty})`);
+  console.log(`[BREngine] Round ${round} started (difficulty: ${difficulty}, duration: ${roundDuration}s)`);
 }
 
 /**
@@ -880,6 +881,48 @@ function sanitizeQuestion(q) {
   };
 }
 
+// ── Early Round Termination ─────────────────────────────────────
+
+/**
+ * Fix 8/11: Check if all active players have submitted (correct or incorrect).
+ * If so, end the round immediately.
+ */
+function checkEarlyTermination(roomId, state) {
+  if (!state || state.status !== 'active') return;
+
+  const activePlayersCount = state.teams
+    .filter(t => t.status === 'active')
+    .reduce((acc, t) => acc + t.players.length, 0);
+
+  const submittedCount = state.roundSubmittedPlayers ? state.roundSubmittedPlayers.size : 0;
+
+  if (submittedCount >= activePlayersCount && activePlayersCount > 0) {
+    console.log(`[BREngine] All ${activePlayersCount} active players have submitted. Terminating round ${state.currentRound} early.`);
+
+    // Fix 8: Use state.roundTimerInterval (not the non-existent roundTimers Map)
+    if (state.roundTimerInterval) {
+      clearInterval(state.roundTimerInterval);
+      state.roundTimerInterval = null;
+    }
+
+    // Execute round end immediately
+    endBRRound(roomId);
+  }
+}
+
+/**
+ * Admin-triggered next round start. Called from server.js after countdown.
+ */
+async function adminStartNextRound(roomId) {
+  const state = brStates.get(roomId);
+  if (!state) return;
+  if (state.status !== 'waiting-for-admin' && state.status !== 'between-rounds') {
+    console.warn(`[BREngine] adminStartNextRound called but status is ${state.status}`);
+    return;
+  }
+  await startNextBRRound(roomId);
+}
+
 // ── Exports ─────────────────────────────────────────────────────
 
 module.exports = {
@@ -889,10 +932,13 @@ module.exports = {
   computeTeamLeaderboard,
   endBRRound,
   startNextBRRound,
+  adminStartNextRound,
   finishBattleRoyale,
   getBRState,
   hasBRState,
   getBRMatchType,
+  checkEarlyTermination,
   BR_ROUND_DURATION_SECONDS,
+  BR_ROUND_DURATIONS,
   BR_INTERMISSION_SECONDS
 };

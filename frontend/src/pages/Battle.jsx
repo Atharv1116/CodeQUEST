@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
+import { useAuth } from '../contexts/AuthContext';
 import Editor from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Trophy, Lightbulb, Clock, TrendingUp, TrendingDown, Minus } from 'lucide-react';
@@ -68,6 +69,7 @@ const Battle = () => {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const socket = useSocket();
+  const { user } = useAuth();
   const [question, setQuestion] = useState(null);
   const [codeMap, setCodeMap] = useState(() => buildDefaultCodeMap());
   const [language, setLanguage] = useState(() => {
@@ -148,9 +150,9 @@ const Battle = () => {
       }
     };
 
-    // CRITICAL: Read socket.id and myTeam via refs so this closure is never stale
+    // CRITICAL: Use winnerUserId (user ID from DB) for reliable comparison instead of socket.id
     const handleMatchFinished = (data) => {
-      console.log('[Battle] match-finished received, data.winner:', data.winner, 'socket.id:', socket.id, 'myTeam:', myTeamRef.current);
+      console.log('[Battle] match-finished received, data.winnerUserId:', data.winnerUserId, 'data.loserUserId:', data.loserUserId, 'user.id:', user?.id, 'data.winnerTeam:', data.winnerTeam);
       setMatchFinished(true);
       setEditorLocked(true);
       setMatchResult(data);
@@ -162,12 +164,19 @@ const Battle = () => {
       }
 
       let didIWin = false;
-      if (data.winner) {
-        // 1v1: compare against live socket.id (socket object is stable in this effect)
+      if (data.winnerUserId && user?.id) {
+        // Fix 12: Compare user IDs (reliable across reconnections)
+        didIWin = data.winnerUserId === user.id;
+      } else if (data.winner) {
+        // Fallback: socket.id comparison (legacy)
         didIWin = data.winner === socket.id;
       } else if (data.winnerTeam) {
-        // 2v2: read via ref so never stale
-        didIWin = data.winnerTeam === myTeamRef.current;
+        // 2v2: check if I'm on winning team via team user IDs or team ref
+        if (data.winningTeamIds && user?.id) {
+          didIWin = data.winningTeamIds.includes(user.id);
+        } else {
+          didIWin = data.winnerTeam === myTeamRef.current;
+        }
       }
 
       console.log('[Battle] didIWin:', didIWin, '— opening', didIWin ? 'WON' : 'LOST', 'modal');
@@ -213,11 +222,27 @@ const Battle = () => {
       setMatchResult(prev => prev ? { ...prev, matchId: matchId || prev.matchId, ratingChanges: ratingChanges?.length > 0 ? ratingChanges : prev.ratingChanges } : prev);
     };
 
+    // Fix 14: Handle match forfeited by opponent
+    const handleMatchForfeited = (data) => {
+      console.log('[Battle] match-forfeited received:', data);
+      setMatchFinished(true);
+      setEditorLocked(true);
+      const didIWin = data.winners?.includes(user?.id) || !data.forfeitingUserId || data.forfeitingUserId !== user?.id;
+      setWinner(didIWin ? 'you' : 'opponent');
+      if (didIWin) {
+        setShowWonModal(true);
+        setChat(prev => [...prev, { user: 'System', message: 'Opponent forfeited! You win! 🎉', type: 'system' }]);
+      } else {
+        setShowLostModal(true);
+      }
+    };
+
     // Register with named refs so .off only removes this exact handler
     socket.on('match-found', handleMatchFound);
     socket.on('timer-tick', handleTimerTick);
     socket.on('match-locked', handleMatchLocked);
     socket.on('match-finished', handleMatchFinished);
+    socket.on('match-forfeited', handleMatchForfeited);
     socket.on('opponent-left-match', handleOpponentLeft);
     socket.on('you-left-match', handleYouLeft);
     socket.on('rating-update', handleRatingUpdate);
@@ -228,13 +253,14 @@ const Battle = () => {
       socket.off('timer-tick', handleTimerTick);
       socket.off('match-locked', handleMatchLocked);
       socket.off('match-finished', handleMatchFinished);
+      socket.off('match-forfeited', handleMatchForfeited);
       socket.off('opponent-left-match', handleOpponentLeft);
       socket.off('you-left-match', handleYouLeft);
       socket.off('rating-update', handleRatingUpdate);
       socket.off('room-state', handleRoomState);
     };
     // Only re-run when socket itself changes — myTeam/matchType read via refs
-  }, [socket, roomId]);
+  }, [socket, roomId, user]);
 
   // ---- EFFECT 2: Chat and misc listeners (can re-run when matchType/teammates change) ----
   useEffect(() => {
@@ -741,15 +767,30 @@ const Battle = () => {
         </div>
       )}
 
-      {/* Lost Modal */}
+      {/* Lost Modal — Fix 13: Enriched with XP info */}
       {showLostModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
             className="glass p-8 rounded-lg max-w-md w-full mx-4 text-center">
-            <h3 className="text-3xl font-bold mb-2 text-red-400">😔 You Lost</h3>
+            <h3 className="text-3xl font-bold mb-2 text-red-400">❌ You Lost</h3>
             <p className="text-gray-300 mb-4">
               {winner === 'opponent' ? 'Your opponent solved the problem first.' : 'You left the match.'}
             </p>
+            {/* XP/Coins display */}
+            {matchResult?.xpChanges?.loser && (
+              <div className="mb-4 p-3 bg-dark-700/60 rounded-lg border border-dark-600">
+                <div className="flex items-center justify-center gap-6 text-sm">
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400">XP Gained</p>
+                    <p className="text-lg font-bold text-yellow-400">+{matchResult.xpChanges.loser.xp}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400">Coins</p>
+                    <p className="text-lg font-bold text-yellow-400">+{matchResult.xpChanges.loser.coins}</p>
+                  </div>
+                </div>
+              </div>
+            )}
             {matchResult?.ratingChanges?.length > 0 && (
               <div className="mb-6 p-3 bg-dark-700/60 rounded-lg border border-dark-600">
                 <p className="text-xs text-gray-400 mb-2">Rating Change</p>
@@ -765,7 +806,7 @@ const Battle = () => {
             )}
             <button onClick={handleLostOk}
               className="bg-primary text-dark-900 px-8 py-3 rounded-lg font-semibold hover:bg-cyan-400 transition">
-              OK
+              🏠 Return to Lobby
             </button>
           </motion.div>
         </div>
@@ -798,7 +839,7 @@ const Battle = () => {
                 <h3 className="text-3xl font-extrabold text-primary mb-1">You Won!</h3>
                 <p className="text-gray-400 text-sm mb-5">Excellent solve — you beat your opponent!</p>
 
-                {/* Quick stats */}
+                {/* Quick stats + XP — Fix 13: enriched with XP/coins */}
                 <div className="flex justify-center gap-6 mb-5">
                   {matchResult?.stats?.winner?.solveTimeMs && (
                     <div className="text-center">
@@ -822,6 +863,18 @@ const Battle = () => {
                         {delta >= 0 ? '+' : ''}{delta}
                       </p>
                       <p className="text-xs text-gray-500">Rating</p>
+                    </div>
+                  )}
+                  {matchResult?.xpChanges?.winner && (
+                    <div className="text-center">
+                      <p className="text-xl font-bold text-yellow-400">+{matchResult.xpChanges.winner.xp}</p>
+                      <p className="text-xs text-gray-500">XP</p>
+                    </div>
+                  )}
+                  {matchResult?.xpChanges?.winner && (
+                    <div className="text-center">
+                      <p className="text-xl font-bold text-yellow-400">+{matchResult.xpChanges.winner.coins}</p>
+                      <p className="text-xs text-gray-500">Coins</p>
                     </div>
                   )}
                 </div>
