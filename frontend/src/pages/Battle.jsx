@@ -110,9 +110,11 @@ const Battle = () => {
   const myTeamRef = useRef(myTeam);
   const matchTypeRef = useRef(matchType);
   const teammatesRef = useRef(teammates);
+  const userRef = useRef(user);
   useEffect(() => { myTeamRef.current = myTeam; }, [myTeam]);
   useEffect(() => { matchTypeRef.current = matchType; }, [matchType]);
   useEffect(() => { teammatesRef.current = teammates; }, [teammates]);
+  useEffect(() => { userRef.current = user; }, [user]);
   const currentLanguageConfig = LANGUAGE_CONFIG[language] || LANGUAGE_CONFIG.python;
   const currentCode = codeMap[language] ?? '';
   const hasRunnableCode = currentCode.trim().length > 0;
@@ -151,8 +153,10 @@ const Battle = () => {
     };
 
     // CRITICAL: Use winnerUserId (user ID from DB) for reliable comparison instead of socket.id
+    // Read user via userRef so the closure is never stale and the effect doesn't re-run
     const handleMatchFinished = (data) => {
-      console.log('[Battle] match-finished received, data.winnerUserId:', data.winnerUserId, 'data.loserUserId:', data.loserUserId, 'user.id:', user?.id, 'data.winnerTeam:', data.winnerTeam);
+      const currentUser = userRef.current;
+      console.log('[Battle] match-finished received, data.winnerUserId:', data.winnerUserId, 'data.loserUserId:', data.loserUserId, 'user.id:', currentUser?.id, 'data.winnerTeam:', data.winnerTeam);
       setMatchFinished(true);
       setEditorLocked(true);
       setMatchResult(data);
@@ -164,16 +168,17 @@ const Battle = () => {
       }
 
       let didIWin = false;
-      if (data.winnerUserId && user?.id) {
-        // Fix 12: Compare user IDs (reliable across reconnections)
-        didIWin = data.winnerUserId === user.id;
+      const myUserId = currentUser?.id?.toString() || currentUser?._id?.toString();
+      if (data.winnerUserId && myUserId) {
+        // Compare user IDs (reliable across reconnections, use toString for safety)
+        didIWin = data.winnerUserId.toString() === myUserId;
       } else if (data.winner) {
         // Fallback: socket.id comparison (legacy)
         didIWin = data.winner === socket.id;
       } else if (data.winnerTeam) {
         // 2v2: check if I'm on winning team via team user IDs or team ref
-        if (data.winningTeamIds && user?.id) {
-          didIWin = data.winningTeamIds.includes(user.id);
+        if (data.winningTeamIds && myUserId) {
+          didIWin = data.winningTeamIds.map(id => id.toString()).includes(myUserId);
         } else {
           didIWin = data.winnerTeam === myTeamRef.current;
         }
@@ -224,10 +229,12 @@ const Battle = () => {
 
     // Fix 14: Handle match forfeited by opponent
     const handleMatchForfeited = (data) => {
+      const currentUser = userRef.current;
+      const myUserId = currentUser?.id?.toString() || currentUser?._id?.toString();
       console.log('[Battle] match-forfeited received:', data);
       setMatchFinished(true);
       setEditorLocked(true);
-      const didIWin = data.winners?.includes(user?.id) || !data.forfeitingUserId || data.forfeitingUserId !== user?.id;
+      const didIWin = (data.winners && myUserId) ? data.winners.map(id => id.toString()).includes(myUserId) : (!data.forfeitingUserId || data.forfeitingUserId.toString() !== myUserId);
       setWinner(didIWin ? 'you' : 'opponent');
       if (didIWin) {
         setShowWonModal(true);
@@ -259,8 +266,8 @@ const Battle = () => {
       socket.off('rating-update', handleRatingUpdate);
       socket.off('room-state', handleRoomState);
     };
-    // Only re-run when socket itself changes — myTeam/matchType read via refs
-  }, [socket, roomId, user]);
+    // Only re-run when socket itself changes — user/myTeam/matchType read via refs
+  }, [socket, roomId]);
 
   // ---- EFFECT 2: Chat and misc listeners (can re-run when matchType/teammates change) ----
   useEffect(() => {

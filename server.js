@@ -492,7 +492,15 @@ async function handleMatchForfeit(roomId, forfeitingUserId) {
 io.on('connection', (socket) => {
   console.log(`✅ User connected: ${socket.id}`);
 
-  // Authenticate socket
+  // Immediately populate playerSessions from handshake auth
+  // This ensures the mapping exists even before the 'authenticate' event fires
+  const handshakeUserId = socket.handshake?.auth?.userId;
+  if (handshakeUserId) {
+    playerSessions.set(socket.id, handshakeUserId);
+    console.log(`[Server] playerSessions pre-populated: ${socket.id} → ${handshakeUserId}`);
+  }
+
+  // Authenticate socket (also updates DB socketId)
   socket.on('authenticate', async ({ token, userId }) => {
     try {
       if (userId) {
@@ -1705,7 +1713,7 @@ io.on('connection', (socket) => {
         settings: {
           map: settings?.map || 'default',
           region: settings?.region || 'auto',
-          minPlayersToStart: settings?.minPlayersToStart || 10
+          difficulty: settings?.difficulty || 'medium'
         }
       });
 
@@ -1714,6 +1722,9 @@ io.on('connection', (socket) => {
 
       // Assign host to Team 1, Slot 1
       const user = await User.findById(userId);
+      if (!user) {
+        return socket.emit('room-error', { error: 'User not found. Please log in again.' });
+      }
       room.assignPlayerToSlot(1, 1, userId, socket.id, user.username);
 
       await room.save();
