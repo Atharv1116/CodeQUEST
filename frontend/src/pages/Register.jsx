@@ -2,21 +2,24 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowRight, Phone, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Phone, ShieldCheck, Brain, Users, KeyRound } from 'lucide-react';
 import usePrefersReducedMotion from '../hooks/usePrefersReducedMotion';
 
 const highlightCards = [
   {
     title: 'Coach-crafted Plans',
-    body: 'Let AI Coach scan your skills and generate a personalized training plan.'
+    body: 'Let AI Coach scan your skills and generate a personalized training plan.',
+    icon: <Brain className="text-primary w-6 h-6" />
   },
   {
     title: 'Squad Ready',
-    body: 'Instant team invites, shared lobbies, and cross-device notifications.'
+    body: 'Instant team invites, shared lobbies, and cross-device notifications.',
+    icon: <Users className="text-secondary w-6 h-6" />
   },
   {
     title: 'Mobile OTP Signup',
-    body: 'Skip passwords—link your number and start coding within seconds.'
+    body: 'Skip passwords—link your number and start coding within seconds.',
+    icon: <KeyRound className="text-cta w-6 h-6" />
   }
 ];
 
@@ -146,12 +149,12 @@ const Register = () => {
 
   return (
     <div className="min-h-screen flex flex-col justify-center px-4 py-10">
-      <motion.div variants={containerVariants} initial="hidden" animate="show" className="glass-card p-8 rounded-3xl max-w-3xl w-full mx-auto shadow-2xl neon-border">
+      <motion.div variants={containerVariants} initial="hidden" animate="show" className="glass-dark p-8 rounded-3xl max-w-3xl w-full mx-auto shadow-glow-sm">
         <div className="text-center mb-8">
           <motion.p custom={0} variants={textStagger} className="text-xs uppercase tracking-[0.35em] text-primary">
             Join the quest
           </motion.p>
-          <motion.h1 custom={1} variants={textStagger} className="text-4xl font-bold text-gradient">
+          <motion.h1 custom={1} variants={textStagger} className="text-4xl font-heading tracking-wide text-gradient">
             Create your CodeQuest account
           </motion.h1>
           <motion.p custom={2} variants={textStagger} className="text-gray-400 mt-3 max-w-2xl mx-auto">
@@ -194,7 +197,7 @@ const Register = () => {
                     value={formData.username}
                     onChange={handleChange}
                     required
-                    className="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 focus:outline-none focus:border-primary"
+                    className="input w-full"
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -205,7 +208,7 @@ const Register = () => {
                     value={formData.email}
                     onChange={handleChange}
                     required
-                    className="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 focus:outline-none focus:border-primary"
+                    className="input w-full"
                   />
                 </div>
                 <div>
@@ -217,7 +220,7 @@ const Register = () => {
                     onChange={handleChange}
                     required
                     minLength={6}
-                    className="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 focus:outline-none focus:border-primary"
+                    className="input w-full"
                   />
                 </div>
                 <div>
@@ -227,7 +230,7 @@ const Register = () => {
                     name="college"
                     value={formData.college}
                     onChange={handleChange}
-                    className="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 focus:outline-none focus:border-primary"
+                    className="input w-full"
                   />
                 </div>
               </motion.div>
@@ -247,7 +250,7 @@ const Register = () => {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+1 555 123 4567"
-                    className="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 focus:outline-none focus:border-primary"
+                    className="input w-full"
                   />
                 </div>
                 <div className="flex gap-3 flex-wrap">
@@ -264,7 +267,7 @@ const Register = () => {
                     value={otp}
                     onChange={(e) => setOtp(e.target.value)}
                     placeholder="Code"
-                    className="w-32 bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 focus:outline-none focus:border-primary text-center tracking-[0.4em]"
+                    className="input w-32 focus:outline-none focus:border-primary text-center tracking-[0.4em]"
                   />
                 </div>
                 <p className="text-xs text-gray-400 flex items-center gap-2">
@@ -279,7 +282,7 @@ const Register = () => {
             type="submit"
             disabled={loading}
             whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
-            className="w-full bg-primary text-dark-900 py-3 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-lg shadow-primary/30 disabled:opacity-60 disabled:cursor-not-allowed transition"
+            className="btn-primary w-full flex items-center justify-center gap-2 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed transition"
           >
             {loading ? (
               <span className="flex items-center gap-2">
@@ -315,9 +318,10 @@ const Register = () => {
                 ? undefined
                 : { y: -6, boxShadow: '0 10px 25px rgba(0,0,0,0.35)', transition: { duration: 0.25 } }
             }
-            className="glass-card p-4 rounded-2xl border border-white/5 hover:neon-border transition duration-300"
+            className="card transition duration-300"
           >
-            <h3 className="font-semibold text-lg mb-2">{card.title}</h3>
+            <div className="mb-2">{card.icon}</div>
+            <h3 className="font-heading tracking-wide text-lg mb-2">{card.title}</h3>
             <p className="text-sm text-gray-400">{card.body}</p>
           </motion.div>
         ))}

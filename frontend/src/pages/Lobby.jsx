@@ -214,7 +214,7 @@ const Lobby = () => {
   return (
     <div className="container mx-auto px-4 py-12">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-12">
-        <h1 className="text-5xl font-bold mb-4 text-gradient">Battle Arena</h1>
+        <h1 className="text-5xl font-heading tracking-wide mb-4 text-gradient">Battle Arena</h1>
         <p className="text-xl text-gray-400">Choose your battle mode</p>
       </motion.div>
 
@@ -224,7 +224,7 @@ const Lobby = () => {
           animate={{ opacity: 1 }}
           className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
         >
-          <div className="glass p-8 rounded-lg text-center">
+          <div className="glass-dark p-8 rounded-2xl text-center shadow-glow-sm">
             <div className="matchmaking-spinner mx-auto mb-4" role="status" aria-live="polite">
               <span className="matchmaking-spinner__track" />
               <span className="matchmaking-spinner__indicator" />
@@ -262,7 +262,7 @@ const Lobby = () => {
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.92, opacity: 0 }}
             transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="glass max-w-2xl w-full rounded-3xl p-10 text-center space-y-8 shadow-glass"
+            className="glass-dark max-w-2xl w-full rounded-3xl p-10 text-center space-y-8 shadow-2xl neon-border"
           >
             {/* Header */}
             <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
@@ -271,7 +271,7 @@ const Lobby = () => {
                 initial={{ scale: 0.9 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.2 }}
-                className="text-5xl font-bold text-gradient mt-4"
+                className="text-5xl font-heading tracking-wide text-gradient mt-4"
               >
                 Opponent Ready!
               </motion.h2>
@@ -284,7 +284,7 @@ const Lobby = () => {
               transition={{ delay: 0.2 }}
               className="bg-dark-700/50 border border-primary/30 rounded-2xl p-6"
             >
-              <p className="text-gray-300 text-lg font-semibold mb-2">{matchOverlay.questionTitle}</p>
+              <p className="text-gray-300 text-lg font-heading font-semibold mb-2">{matchOverlay.questionTitle}</p>
               <div className="flex items-center justify-center gap-3">
                 <span
                   className={`px-3 py-1 rounded-lg text-xs font-bold ${matchOverlay.questionDifficulty === "easy"
@@ -394,7 +394,7 @@ const Lobby = () => {
                 onClick={handleReadyNow}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="px-8 py-3 rounded-xl bg-primary text-dark-900 font-bold shadow-lg shadow-primary/40 hover:bg-cyan-400 transition"
+                className="btn-primary px-8"
               >
                 Ready
               </motion.button>
@@ -427,7 +427,7 @@ const Lobby = () => {
             animate={{ scale: 1 }}
             className="glass w-full max-w-md rounded-2xl p-6 space-y-4"
           >
-            <h3 id="leave-modal-title" className="text-2xl font-bold text-gradient">
+            <h3 id="leave-modal-title" className="text-2xl font-heading text-gradient">
               Leave Match?
             </h3>
             <p className="text-gray-300">
@@ -463,13 +463,13 @@ const Lobby = () => {
           variants={staggerItemVariants}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          className="glass p-8 rounded-lg text-center cursor-pointer hover:glow transition"
+          className="glass-dark p-8 rounded-2xl text-center cursor-pointer hover:neon-border transition shadow-glow-sm"
           onClick={() => joinGame("1v1")}
         >
           <Users className="text-primary mx-auto mb-4" size={60} />
           <h2 className="text-2xl font-bold mb-2">1v1 Duel</h2>
           <p className="text-gray-400 mb-4">Face off against one opponent</p>
-          <button className="bg-primary text-dark-900 px-6 py-2 rounded-lg font-semibold hover:bg-cyan-400 transition">
+          <button className="btn-primary mt-2">
             Join Queue
           </button>
         </motion.div>
@@ -479,13 +479,13 @@ const Lobby = () => {
           variants={staggerItemVariants}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          className="glass p-8 rounded-lg text-center cursor-pointer hover:glow transition"
+          className="glass-dark p-8 rounded-2xl text-center cursor-pointer hover:neon-border transition shadow-glow-sm"
           onClick={() => joinGame("2v2")}
         >
           <Users className="text-primary mx-auto mb-4" size={60} />
           <h2 className="text-2xl font-bold mb-2">2v2 Team Battle</h2>
           <p className="text-gray-400 mb-4">Team up and compete</p>
-          <button className="bg-primary text-dark-900 px-6 py-2 rounded-lg font-semibold hover:bg-cyan-400 transition">
+          <button className="btn-primary mt-2">
             Join Queue
           </button>
         </motion.div>
@@ -495,13 +495,13 @@ const Lobby = () => {
           variants={staggerItemVariants}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          className="glass p-8 rounded-lg text-center cursor-pointer hover:glow transition border-2 border-primary"
+          className="glass-dark p-8 rounded-2xl text-center cursor-pointer neon-border transition shadow-glow-sm"
           onClick={() => navigate("/battle-royale-mode")}
         >
           <Zap className="text-primary mx-auto mb-4" size={60} />
           <h2 className="text-2xl font-bold mb-2">Battle Royale</h2>
           <p className="text-gray-400 mb-4">Last coder standing wins!</p>
-          <button className="bg-primary text-dark-900 px-6 py-2 rounded-lg font-semibold hover:bg-cyan-400 transition">
+          <button className="btn-primary mt-2">
             Enter Battle
           </button>
         </motion.div>
@@ -513,9 +513,9 @@ const Lobby = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="mt-12 glass p-6 rounded-lg max-w-2xl mx-auto"
+          className="mt-12 glass-dark p-6 rounded-2xl max-w-2xl mx-auto shadow-glow-sm"
         >
-          <h3 className="text-xl font-semibold mb-4 text-center">Your Stats</h3>
+          <h3 className="text-xl font-heading font-semibold mb-4 text-center text-primary">Your Stats</h3>
           <div className="grid grid-cols-4 gap-4 text-center">
             <div>
               <p className="text-2xl font-bold text-primary">{user.rating}</p>

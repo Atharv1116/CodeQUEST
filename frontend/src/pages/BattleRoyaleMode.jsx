@@ -52,7 +52,7 @@ const BattleRoyaleMode = () => {
     if (view === 'custom') {
         // Custom Room View: Create or Join
         return (
-            <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center p-4">
+            <div className="min-h-screen flex items-center justify-center p-4">
                 <div className="max-w-4xl w-full">
                     {/* Header */}
                     <motion.div
@@ -60,8 +60,8 @@ const BattleRoyaleMode = () => {
                         animate={{ opacity: 1, y: 0 }}
                         className="text-center mb-12"
                     >
-                        <h1 className="text-5xl font-bold text-white mb-4 flex items-center justify-center gap-3">
-                            <Crown className="w-12 h-12 text-yellow-400" />
+                        <h1 className="text-5xl font-heading tracking-wide text-gradient mb-4 flex items-center justify-center gap-3">
+                            <Crown className="w-12 h-12 text-primary" />
                             Custom Room
                         </h1>
                         <p className="text-gray-300 text-lg">
@@ -78,16 +78,16 @@ const BattleRoyaleMode = () => {
                             transition={{ delay: 0.1 }}
                             onClick={handleCreateRoom}
                             disabled={creating}
-                            className="group relative bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl p-8 hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="group relative glass-dark rounded-2xl p-8 hover:neon-border transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-glow-sm cursor-pointer"
                         >
                             <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
 
                             <div className="relative z-10">
-                                <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <Plus className="w-10 h-10 text-white" />
+                                <div className="w-20 h-20 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-primary/40">
+                                    <Plus className="w-10 h-10 text-primary" />
                                 </div>
 
-                                <h2 className="text-2xl font-bold text-white mb-2">
+                                <h2 className="text-2xl font-heading tracking-wide text-white mb-2">
                                     {creating ? 'Creating...' : 'Create Room'}
                                 </h2>
 
@@ -108,16 +108,16 @@ const BattleRoyaleMode = () => {
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: 0.2 }}
                             onClick={() => setShowJoinModal(true)}
-                            className="group relative bg-gradient-to-br from-blue-600 to-cyan-600 rounded-2xl p-8 hover:scale-105 transition-all duration-300"
+                            className="group relative glass-dark rounded-2xl p-8 hover:neon-border transition-all duration-300 shadow-glow-sm cursor-pointer"
                         >
                             <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
 
                             <div className="relative z-10">
-                                <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <LogIn className="w-10 h-10 text-white" />
+                                <div className="w-20 h-20 bg-secondary/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-secondary/40">
+                                    <LogIn className="w-10 h-10 text-secondary" />
                                 </div>
 
-                                <h2 className="text-2xl font-bold text-white mb-2">
+                                <h2 className="text-2xl font-heading tracking-wide text-white mb-2">
                                     Join Room
                                 </h2>
 
@@ -165,7 +165,7 @@ const BattleRoyaleMode = () => {
 
     // Main View: Enter Queue or Custom Room
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center p-4">
+        <div className="min-h-screen flex items-center justify-center p-4">
             <div className="max-w-4xl w-full">
                 {/* Header */}
                 <motion.div
@@ -173,8 +173,8 @@ const BattleRoyaleMode = () => {
                     animate={{ opacity: 1, y: 0 }}
                     className="text-center mb-12"
                 >
-                    <h1 className="text-5xl font-bold text-white mb-4 flex items-center justify-center gap-3">
-                        <Users className="w-12 h-12 text-purple-400" />
+                    <h1 className="text-5xl font-heading tracking-wide text-gradient mb-4 flex items-center justify-center gap-3">
+                        <Users className="w-12 h-12 text-primary" />
                         Battle Royale
                     </h1>
                     <p className="text-gray-300 text-lg">
@@ -190,16 +190,16 @@ const BattleRoyaleMode = () => {
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.1 }}
                         onClick={handleEnterQueue}
-                        className="group relative bg-gradient-to-br from-green-600 to-emerald-600 rounded-2xl p-8 hover:scale-105 transition-all duration-300"
+                        className="group relative glass-dark rounded-2xl p-8 hover:neon-border transition-all duration-300 shadow-glow-sm cursor-pointer"
                     >
                         <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
 
                         <div className="relative z-10">
-                            <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <Zap className="w-10 h-10 text-white" />
+                            <div className="w-20 h-20 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-primary/40">
+                                <Zap className="w-10 h-10 text-primary" />
                             </div>
 
-                            <h2 className="text-2xl font-bold text-white mb-2">
+                            <h2 className="text-2xl font-heading tracking-wide text-white mb-2">
                                 Enter Queue
                             </h2>
 
@@ -220,16 +220,16 @@ const BattleRoyaleMode = () => {
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.2 }}
                         onClick={() => setView('custom')}
-                        className="group relative bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl p-8 hover:scale-105 transition-all duration-300"
+                        className="group relative glass-dark rounded-2xl p-8 hover:neon-border transition-all duration-300 shadow-glow-sm cursor-pointer"
                     >
                         <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
 
                         <div className="relative z-10">
-                            <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <Crown className="w-10 h-10 text-white" />
+                            <div className="w-20 h-20 bg-secondary/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-secondary/40">
+                                <Crown className="w-10 h-10 text-secondary" />
                             </div>
 
-                            <h2 className="text-2xl font-bold text-white mb-2">
+                            <h2 className="text-2xl font-heading tracking-wide text-white mb-2">
                                 Custom Room
                             </h2>
 

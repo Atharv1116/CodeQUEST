@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
 import { AnimatePresence, motion } from "framer-motion"
-import { ArrowRight, Phone, ShieldCheck } from "lucide-react"
+import { ArrowRight, Phone, ShieldCheck, Brain, Zap, KeyRound } from "lucide-react"
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion"
 import { staggerContainerVariants, staggerItemVariants } from "../utils/animations"
 
@@ -12,17 +12,17 @@ const featureCards = [
   {
     title: "AI Warmups",
     body: "Get personalized hints before every match to enter with confidence.",
-    icon: "🧠",
+    icon: <Brain className="text-primary w-6 h-6" />,
   },
   {
     title: "Instant Matchmaking",
     body: "Real-time queues pair you with rivals at your exact skill level in seconds.",
-    icon: "⚡",
+    icon: <Zap className="text-secondary w-6 h-6" />,
   },
   {
     title: "Secure Mobile Auth",
     body: "Quick one-time passcode login, encrypted and expires in 2 minutes.",
-    icon: "🔐",
+    icon: <KeyRound className="text-cta w-6 h-6" />,
   },
 ]
 
@@ -140,7 +140,7 @@ const Login = () => {
         initial={{ opacity: 0, y: 24, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-        className="glass-card p-8 rounded-3xl max-w-2xl w-full mx-auto shadow-2xl neon-border"
+        className="glass-dark p-8 rounded-3xl max-w-2xl w-full mx-auto shadow-glow-sm"
       >
         <motion.div
           variants={staggerContainerVariants}
@@ -151,7 +151,7 @@ const Login = () => {
           <motion.p variants={staggerItemVariants} className="text-xs uppercase tracking-[0.35em] text-primary">
             Welcome back
           </motion.p>
-          <motion.h1 variants={staggerItemVariants} className="text-4xl font-bold text-gradient">
+          <motion.h1 variants={staggerItemVariants} className="text-4xl font-heading text-gradient">
             Login to CodeQuest
           </motion.h1>
           <motion.p variants={staggerItemVariants} className="text-gray-400">
@@ -197,7 +197,7 @@ const Login = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
+                    className="input w-full"
                   />
                 </div>
 
@@ -208,7 +208,7 @@ const Login = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
+                    className="input w-full"
                   />
                 </div>
               </motion.div>
@@ -228,7 +228,7 @@ const Login = () => {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+1 555 123 4567"
-                    className="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
+                    className="input w-full"
                   />
                 </div>
                 <div className="flex gap-3 flex-wrap">
@@ -245,7 +245,7 @@ const Login = () => {
                     value={otp}
                     onChange={(e) => setOtp(e.target.value)}
                     placeholder="Code"
-                    className="w-32 bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 text-center tracking-[0.4em]"
+                    className="input w-32 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 text-center tracking-[0.4em]"
                   />
                 </div>
                 <p className="text-xs text-gray-400 flex items-center gap-2">
@@ -260,7 +260,7 @@ const Login = () => {
             type="submit"
             disabled={loading}
             whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
-            className="w-full bg-primary text-dark-900 py-3 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-lg shadow-primary/30 disabled:opacity-60 disabled:cursor-not-allowed transition"
+            className="btn-primary w-full flex items-center justify-center gap-2"
           >
             {loading ? (
               <span className="flex items-center gap-2">
@@ -296,10 +296,10 @@ const Login = () => {
                 ? undefined
                 : { y: -6, boxShadow: "0 10px 25px rgba(0,0,0,0.35)", transition: { duration: 0.25 } }
             }
-            className="glass-card p-4 rounded-2xl border border-white/5 hover:neon-border transition duration-300"
+            className="card transition duration-300"
           >
-            <div className="text-2xl mb-2">{card.icon}</div>
-            <h3 className="font-semibold text-lg mb-2">{card.title}</h3>
+            <div className="mb-2">{card.icon}</div>
+            <h3 className="font-heading tracking-wide text-lg mb-2">{card.title}</h3>
             <p className="text-sm text-gray-400">{card.body}</p>
           </motion.div>
         ))}

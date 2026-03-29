@@ -95,7 +95,7 @@ const Home = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.6 }}
-            className="text-5xl md:text-7xl font-bold mb-6 text-gradient text-balance"
+            className="text-5xl md:text-7xl font-heading mb-6 text-gradient text-balance"
           >
             CodeQuest
           </motion.h1>
@@ -132,7 +132,7 @@ const Home = () => {
               >
                 <Link
                   to="/lobby"
-                  className="inline-flex items-center gap-2 bg-primary text-dark-900 px-8 py-4 rounded-xl text-lg font-semibold shadow-lg shadow-primary/30 hover:bg-cyan-400 transition focus-ring"
+                  className="btn-primary flex items-center gap-2"
                 >
                   Enter Arena <ArrowRight size={20} />
                 </Link>
@@ -145,7 +145,7 @@ const Home = () => {
                 >
                   <button
                     onClick={handleGetStarted}
-                    className="inline-flex items-center gap-2 bg-primary text-dark-900 px-8 py-4 rounded-xl text-lg font-semibold shadow-lg shadow-primary/30 hover:bg-cyan-400 transition focus-ring"
+                    className="btn-primary flex items-center gap-2"
                   >
                     Get Started <ArrowRight size={20} />
                   </button>
@@ -156,7 +156,7 @@ const Home = () => {
                 >
                   <Link
                     to="/login"
-                    className="inline-flex items-center gap-2 border-2 border-primary text-primary px-8 py-4 rounded-xl text-lg font-semibold hover:bg-primary/10 transition focus-ring"
+                    className="btn-secondary"
                   >
                     Login
                   </Link>
@@ -173,7 +173,7 @@ const Home = () => {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-4xl md:text-5xl font-bold text-center mb-16 text-gradient text-balance"
+          className="text-4xl md:text-5xl font-heading text-center mb-16 text-gradient text-balance"
         >
           Powerful Features
         </motion.h2>
@@ -192,16 +192,16 @@ const Home = () => {
                 key={feature.title}
                 variants={staggerItemVariants}
                 whileHover={prefersReducedMotion ? {} : { scale: 1.05, y: -8 }}
-                className="glass-card p-8 rounded-2xl group cursor-pointer hover:neon-border transition duration-300"
+                className="card"
               >
                 <motion.div
                   initial={{ scale: 1 }}
                   whileHover={prefersReducedMotion ? {} : { scale: 1.1, rotate: 5 }}
                   className="mb-4"
                 >
-                  <Icon className="text-primary group-hover:text-cyan-400 transition" size={48} />
+                  <Icon className="text-primary group-hover:text-secondary transition" size={48} />
                 </motion.div>
-                <h3 className="text-xl font-bold mb-3">{feature.title}</h3>
+                <h3 className="text-xl font-heading font-bold mb-3">{feature.title}</h3>
                 <p className="text-gray-400 leading-relaxed">{feature.description}</p>
               </motion.div>
             )
@@ -215,15 +215,15 @@ const Home = () => {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="glass-card p-12 rounded-3xl max-w-2xl mx-auto neon-border"
+          className="glass-dark p-12 rounded-xl max-w-2xl mx-auto shadow-glow-sm"
         >
-          <h2 className="text-3xl font-bold mb-4 text-gradient">Ready to compete?</h2>
+          <h2 className="text-3xl font-heading mb-4 text-gradient">Ready to compete?</h2>
           <p className="text-gray-400 mb-8">Start your CodeQuest journey today and challenge programmers worldwide.</p>
           <motion.button
             whileHover={prefersReducedMotion ? {} : { scale: 1.05 }}
             whileTap={prefersReducedMotion ? {} : { scale: 0.95 }}
             onClick={handleGetStarted}
-            className="bg-primary text-dark-900 px-8 py-3 rounded-xl font-bold shadow-lg shadow-primary/30 hover:bg-cyan-400 transition"
+            className="btn-primary"
           >
             {user ? "Go to Lobby" : "Sign Up Now"}
           </motion.button>

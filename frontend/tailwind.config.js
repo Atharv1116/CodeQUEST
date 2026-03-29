@@ -4,23 +4,25 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: "#00ffc3", // Cyan accent
-        secondary: "#8b5cf6", // Purple
-        accent: "#ec4899", // Pink
-        success: "#10b981", // Green
-        danger: "#ef4444", // Red
+        primary: "#7C3AED", // Neon Purple
+        secondary: "#A78BFA",
+        cta: "#F43F5E", // Rose action
+        success: "#10b981",
+        danger: "#ef4444",
+        background: "#0F0F23",
+        text: "#E2E8F0",
         dark: {
-          950: "#0a0a0a",
-          900: "#0e0e0e",
-          800: "#1a1a1a",
-          700: "#222",
-          600: "#333",
-          500: "#404040",
+          950: "#050510",
+          900: "#0F0F23", // Match background
+          800: "#1A1A33",
+          700: "#262645",
+          600: "#33335A",
+          500: "#404070",
         },
-        light: {
-          50: "#fafafa",
-          100: "#f5f5f5",
-        },
+      },
+      fontFamily: {
+        heading: ['"Russo One"', 'sans-serif'],
+        body: ['"Chakra Petch"', 'sans-serif'],
       },
       animation: {
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
@@ -28,6 +30,9 @@ export default {
         float: "float 3s ease-in-out infinite",
         shimmer: "shimmer 2s infinite",
         "spin-slow": "spin 8s linear infinite",
+        glitch: "glitch 1.5s infinite",
+        "neon-blink": "neon-blink 3s infinite alternate",
+        scanline: "scanline 8s linear infinite",
       },
       keyframes: {
         blob: {
@@ -43,6 +48,22 @@ export default {
           "0%": { backgroundPosition: "-1000px 0" },
           "100%": { backgroundPosition: "1000px 0" },
         },
+        glitch: {
+          "0%": { transform: "translate(0)" },
+          "20%": { transform: "translate(-2px, 2px)" },
+          "40%": { transform: "translate(-2px, -2px)" },
+          "60%": { transform: "translate(2px, 2px)" },
+          "80%": { transform: "translate(2px, -2px)" },
+          "100%": { transform: "translate(0)" },
+        },
+        "neon-blink": {
+          "0%, 100%": { opacity: 1 },
+          "50%": { opacity: 0.8 },
+        },
+        scanline: {
+          "0%": { transform: "translateY(-100%)" },
+          "100%": { transform: "translateY(100vh)" },
+        },
       },
       backdropBlur: {
         xs: "2px",
@@ -50,9 +71,10 @@ export default {
         md: "8px",
       },
       boxShadow: {
-        glass: "0 8px 32px rgba(31, 38, 135, 0.37)",
-        glow: "0 0 20px rgba(0, 255, 195, 0.2)",
-        "glow-sm": "0 0 10px rgba(0, 255, 195, 0.1)",
+        glass: "0 8px 32px rgba(124, 58, 237, 0.2)",
+        glow: "0 0 20px rgba(124, 58, 237, 0.3)",
+        "glow-sm": "0 0 10px rgba(124, 58, 237, 0.2)",
+        "glow-cta": "0 0 20px rgba(244, 63, 94, 0.4)",
       },
       borderRadius: {
         xl: "1rem",

@@ -237,7 +237,7 @@ const CustomRoomLobby = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+            <div className="min-h-screen flex items-center justify-center">
                 <div className="text-white text-xl">Loading room...</div>
             </div>
         );
@@ -245,7 +245,7 @@ const CustomRoomLobby = () => {
 
     if (!room) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+            <div className="min-h-screen flex items-center justify-center">
                 <div className="text-white text-xl">Room not found</div>
             </div>
         );
@@ -254,13 +254,13 @@ const CustomRoomLobby = () => {
     const canStart = isHost && room.totalPlayers >= 2; // Enable at 2+ players
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-4">
+        <div className="min-h-screen p-4">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 mb-6 border border-gray-700"
+                    className="glass-dark rounded-2xl p-6 mb-6 shadow-glow-sm"
                 >
                     <div className="flex items-center justify-between flex-wrap gap-4">
                         {/* Room Code */}
@@ -272,7 +272,7 @@ const CustomRoomLobby = () => {
                                 </span>
                                 <button
                                     onClick={handleCopyCode}
-                                    className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                                    className="p-2 btn-secondary"
                                     title="Copy room code"
                                 >
                                     {copied ? (
@@ -304,9 +304,9 @@ const CustomRoomLobby = () => {
                                         <button
                                             key={level}
                                             onClick={() => handleUpdateSettings({ difficulty: level })}
-                                            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${room.settings?.difficulty === level
-                                                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white scale-105'
-                                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                            className={`px-4 py-2 rounded-lg font-heading font-semibold text-sm transition-all ${room.settings?.difficulty === level
+                                                ? 'bg-primary text-dark-900 shadow-glow-sm scale-105'
+                                                : 'bg-dark-700 text-gray-300 hover:bg-dark-600'
                                                 }`}
                                         >
                                             {level.charAt(0).toUpperCase() + level.slice(1)}
@@ -321,7 +321,7 @@ const CustomRoomLobby = () => {
                             <button
                                 onClick={handleStartMatch}
                                 disabled={!canStart}
-                                className="px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-semibold"
+                                className="btn-primary flex items-center gap-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                                 title={!isHost ? "Only host can start" : !canStart ? "Need at least 2 players" : "Start the match"}
                             >
                                 <Play className="w-5 h-5" />
@@ -330,7 +330,7 @@ const CustomRoomLobby = () => {
 
                             <button
                                 onClick={handleLeaveRoom}
-                                className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                                className="px-6 py-3 bg-danger/20 hover:bg-danger/40 text-danger border border-danger/50 rounded-lg transition-colors flex items-center gap-2"
                             >
                                 <LogOut className="w-5 h-5" />
                                 Leave
@@ -344,16 +344,16 @@ const CustomRoomLobby = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="bg-blue-900/30 backdrop-blur-sm rounded-xl p-4 mb-6 border border-blue-700"
+                    className="glass-dark rounded-xl p-4 mb-6 shadow-glow-sm"
                 >
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                            <Eye className="w-5 h-5 text-blue-400" />
-                            <h3 className="text-lg font-bold text-white">Administrators (Spectators)</h3>
+                            <Eye className="w-5 h-5 text-secondary" />
+                            <h3 className="text-lg font-heading tracking-wide text-white">Administrators (Spectators)</h3>
                         </div>
                         <button
                             onClick={handleJoinAsAdmin}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2 text-sm"
+                            className="btn-secondary flex items-center gap-2 text-sm"
                         >
                             <Eye className="w-4 h-4" />
                             Join as Admin
@@ -450,7 +450,7 @@ const SettingsModal = ({ room, onClose, onUpdate }) => {
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-8 max-w-md w-full border border-gray-700"
+                className="glass-dark rounded-2xl p-8 max-w-md w-full border border-primary/30 shadow-glow-sm"
             >
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-2xl font-bold text-white flex items-center gap-2">
@@ -471,8 +471,8 @@ const SettingsModal = ({ room, onClose, onUpdate }) => {
                                     key={level}
                                     onClick={() => setDifficulty(level)}
                                     className={`px-4 py-3 rounded-lg font-semibold transition-all ${difficulty === level
-                                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white scale-105'
-                                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                        ? 'bg-primary text-dark-900 shadow-glow-sm'
+                                        : 'bg-dark-700 text-gray-300 hover:bg-dark-600'
                                         }`}
                                 >
                                     {level.charAt(0).toUpperCase() + level.slice(1)}
@@ -485,13 +485,13 @@ const SettingsModal = ({ room, onClose, onUpdate }) => {
                 <div className="flex gap-3 mt-8">
                     <button
                         onClick={onClose}
-                        className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                        className="flex-1 btn-secondary"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleSave}
-                        className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg transition-all font-semibold"
+                        className="flex-1 btn-primary text-center"
                     >
                         Save Settings
                     </button>
@@ -506,11 +506,11 @@ const TeamCard = ({ team, onSlotClick, mySlot, hostId, roomStatus }) => {
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 border border-gray-700"
+            className="card border border-primary/20"
         >
             {/* Team Header */}
-            <div className="text-center mb-3 pb-3 border-b border-gray-700">
-                <h3 className="text-lg font-bold text-white">Team {team.teamNumber}</h3>
+            <div className="text-center mb-3 pb-3 border-b border-dark-600">
+                <h3 className="text-lg font-heading tracking-wide text-white">Team {team.teamNumber}</h3>
                 <div className="text-xs text-gray-400 mt-1">
                     {team.slots.filter(s => s.playerId).length} / {team.slots.length}
                 </div>

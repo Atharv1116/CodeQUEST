@@ -2,7 +2,7 @@
 
 import { Link, useNavigate, useLocation } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
-import { Trophy, User, LogOut, Home, Brain } from "lucide-react"
+import { Trophy, User, LogOut, Home, Brain, Swords } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion"
 import { useState } from "react"
@@ -65,11 +65,11 @@ const Navbar = () => {
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 20, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
-                className="text-2xl"
+                className="text-primary"
               >
-                ⚔️
+                <Swords size={28} />
               </motion.div>
-              <span className="text-xl font-bold text-gradient hidden sm:inline">CodeQuest</span>
+              <span className="text-xl font-heading tracking-wide text-gradient hidden sm:inline">CodeQuest</span>
             </Link>
           </motion.div>
 
@@ -169,7 +169,7 @@ const Navbar = () => {
                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                   <Link
                     to="/register"
-                    className="bg-primary text-dark-900 px-4 py-2 rounded-lg font-semibold hover:bg-cyan-400 transition shadow-lg shadow-primary/30"
+                    className="bg-cta text-white px-4 py-2 rounded-lg font-heading tracking-wide hover:opacity-90 transition shadow-glow-cta"
                   >
                     Sign Up
                   </Link>

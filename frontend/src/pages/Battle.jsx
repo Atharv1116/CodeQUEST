@@ -594,7 +594,7 @@ const Battle = () => {
           </div>
           <button
             onClick={() => navigate('/lobby')}
-            className="flex items-center gap-2 bg-primary text-dark-900 px-5 py-2 rounded-lg font-semibold hover:bg-cyan-400 transition text-sm"
+            className="flex items-center gap-2 btn-primary px-5 py-2 text-sm"
           >
             🏠 Return to Lobby
           </button>
@@ -701,13 +701,13 @@ const Battle = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-dark-900">
         <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-          className="glass p-12 rounded-lg text-center max-w-2xl">
+          className="glass-dark p-12 rounded-2xl text-center max-w-2xl shadow-glow-sm neon-border">
           <Trophy className="text-primary mx-auto mb-4" size={80} />
-          <h2 className="text-4xl font-bold mb-4 text-gradient">
+          <h2 className="text-4xl font-heading tracking-wide mb-4 text-gradient">
             {winner === 'you' ? 'Victory!' : 'Defeat'}
           </h2>
           <button onClick={() => navigate('/lobby')}
-            className="bg-primary text-dark-900 px-8 py-3 rounded-lg font-semibold hover:bg-cyan-400 transition">
+            className="btn-primary mt-4">
             Return to Lobby
           </button>
         </motion.div>
@@ -732,23 +732,23 @@ const Battle = () => {
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             onClick={(e) => e.stopPropagation()}
-            className="glass p-8 rounded-lg max-w-md w-full mx-4"
+            className="glass-dark p-8 rounded-2xl max-w-md w-full mx-4 shadow-glow-sm border border-primary/30"
           >
-            <h3 className="text-2xl font-bold mb-4 text-gradient">Leave Match?</h3>
+            <h3 className="text-2xl font-heading tracking-wide mb-4 text-gradient">Leave Match?</h3>
             <p className="text-gray-300 mb-6">
               Are you sure you want to leave this match? You will lose the match.
             </p>
             <div className="flex space-x-4">
               <button
                 onClick={confirmLeave}
-                className="flex-1 bg-red-500 text-white py-2 rounded-lg font-semibold hover:bg-red-600 transition cursor-pointer"
+                className="flex-1 btn-secondary text-center"
                 type="button"
               >
                 Yes, Leave
               </button>
               <button
                 onClick={cancelLeave}
-                className="flex-1 bg-primary text-dark-900 py-2 rounded-lg font-semibold hover:bg-cyan-400 transition cursor-pointer"
+                className="flex-1 btn-primary text-center"
                 type="button"
               >
                 No, Stay
@@ -762,12 +762,12 @@ const Battle = () => {
       {showDrawModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-            className="glass p-8 rounded-lg max-w-md w-full mx-4 text-center">
+            className="glass-dark p-8 rounded-2xl max-w-md w-full mx-4 text-center shadow-glow-sm border border-primary/30">
             <Minus className="text-gray-400 mx-auto mb-4" size={60} />
-            <h3 className="text-3xl font-bold mb-2 text-gray-300">⏰ Draw</h3>
+            <h3 className="text-3xl font-heading tracking-wide mb-2 text-gray-300">⏰ Draw</h3>
             <p className="text-gray-400 mb-4">{matchResult?.message || "Time's up! It's a draw."}</p>
             <button onClick={() => { setShowDrawModal(false); navigate('/lobby'); }}
-              className="bg-primary text-dark-900 px-8 py-3 rounded-lg font-semibold hover:bg-cyan-400 transition">
+              className="btn-primary mt-4">
               Return to Lobby
             </button>
           </motion.div>
@@ -778,8 +778,8 @@ const Battle = () => {
       {showLostModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-            className="glass p-8 rounded-lg max-w-md w-full mx-4 text-center">
-            <h3 className="text-3xl font-bold mb-2 text-red-400">❌ You Lost</h3>
+            className="glass-dark p-8 rounded-2xl max-w-md w-full mx-4 text-center shadow-glow-sm border border-danger/30">
+            <h3 className="text-3xl font-heading tracking-wide mb-2 text-danger">❌ You Lost</h3>
             <p className="text-gray-300 mb-4">
               {winner === 'opponent' ? 'Your opponent solved the problem first.' : 'You left the match.'}
             </p>
@@ -812,7 +812,7 @@ const Battle = () => {
               </div>
             )}
             <button onClick={handleLostOk}
-              className="bg-primary text-dark-900 px-8 py-3 rounded-lg font-semibold hover:bg-cyan-400 transition">
+              className="btn-primary mt-4">
               🏠 Return to Lobby
             </button>
           </motion.div>
@@ -830,7 +830,7 @@ const Battle = () => {
               initial={{ scale: 0.85, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               transition={{ type: 'spring', damping: 18 }}
-              className="glass rounded-2xl max-w-sm w-full mx-4 overflow-hidden">
+              className="glass-dark rounded-2xl max-w-sm w-full mx-4 overflow-hidden shadow-glow-sm border border-primary/30">
 
               {/* Gradient top bar */}
               <div className="h-2 bg-gradient-to-r from-primary via-cyan-400 to-primary" />
@@ -843,7 +843,7 @@ const Battle = () => {
                   transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
                   className="text-6xl mb-3">🏆</motion.div>
 
-                <h3 className="text-3xl font-extrabold text-primary mb-1">You Won!</h3>
+                <h3 className="text-3xl font-heading tracking-wide text-primary mb-1">You Won!</h3>
                 <p className="text-gray-400 text-sm mb-5">Excellent solve — you beat your opponent!</p>
 
                 {/* Quick stats + XP — Fix 13: enriched with XP/coins */}
@@ -887,16 +887,16 @@ const Battle = () => {
                 </div>
 
                 {/* Action buttons */}
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3 mt-4">
                   <button
                     onClick={handleWonSeeAnalysis}
-                    className="w-full bg-primary text-dark-900 py-3 rounded-xl font-bold hover:bg-cyan-400 transition text-sm tracking-wide"
+                    className="w-full btn-primary px-3 py-3 text-center text-sm"
                   >
                     📊 See Full Analysis
                   </button>
                   <button
                     onClick={handleWonReturnHome}
-                    className="w-full bg-dark-700 border border-dark-600 text-gray-300 py-3 rounded-xl font-semibold hover:bg-dark-600 transition text-sm"
+                    className="w-full btn-secondary px-3 py-3 text-center text-sm"
                   >
                     🏠 Return to Lobby
                   </button>
