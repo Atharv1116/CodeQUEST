@@ -146,7 +146,7 @@ const Register = () => {
 
   return (
     <div className="min-h-screen flex flex-col justify-center px-4 py-10">
-      <motion.div variants={containerVariants} initial="hidden" animate="show" className="glass p-8 rounded-3xl max-w-3xl w-full mx-auto shadow-2xl">
+      <motion.div variants={containerVariants} initial="hidden" animate="show" className="glass-card p-8 rounded-3xl max-w-3xl w-full mx-auto shadow-2xl neon-border">
         <div className="text-center mb-8">
           <motion.p custom={0} variants={textStagger} className="text-xs uppercase tracking-[0.35em] text-primary">
             Join the quest
@@ -315,7 +315,7 @@ const Register = () => {
                 ? undefined
                 : { y: -6, boxShadow: '0 10px 25px rgba(0,0,0,0.35)', transition: { duration: 0.25 } }
             }
-            className="glass p-4 rounded-2xl border border-dark-700"
+            className="glass-card p-4 rounded-2xl border border-white/5 hover:neon-border transition duration-300"
           >
             <h3 className="font-semibold text-lg mb-2">{card.title}</h3>
             <p className="text-sm text-gray-400">{card.body}</p>

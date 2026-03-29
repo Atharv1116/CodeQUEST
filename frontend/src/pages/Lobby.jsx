@@ -8,6 +8,7 @@ import { useAuth } from "../contexts/AuthContext"
 import { motion } from "framer-motion"
 import { Users, Zap } from "lucide-react"
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion"
+import { staggerContainerVariants, staggerItemVariants } from "../utils/animations"
 
 const Lobby = () => {
   const [queueStatus, setQueueStatus] = useState({ mode: null, size: 0 })
@@ -451,9 +452,15 @@ const Lobby = () => {
         </motion.div>
       )}
 
-      <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+      <motion.div 
+        variants={staggerContainerVariants}
+        initial="hidden"
+        animate="show"
+        className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto"
+      >
         {/* 1v1 Mode */}
         <motion.div
+          variants={staggerItemVariants}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           className="glass p-8 rounded-lg text-center cursor-pointer hover:glow transition"
@@ -469,6 +476,7 @@ const Lobby = () => {
 
         {/* 2v2 Mode */}
         <motion.div
+          variants={staggerItemVariants}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           className="glass p-8 rounded-lg text-center cursor-pointer hover:glow transition"
@@ -484,6 +492,7 @@ const Lobby = () => {
 
         {/* Battle Royale Mode */}
         <motion.div
+          variants={staggerItemVariants}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           className="glass p-8 rounded-lg text-center cursor-pointer hover:glow transition border-2 border-primary"
@@ -496,7 +505,7 @@ const Lobby = () => {
             Enter Battle
           </button>
         </motion.div>
-      </div>
+      </motion.div>
 
       {/* Quick Stats */}
       {user && (

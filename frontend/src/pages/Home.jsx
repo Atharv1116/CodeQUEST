@@ -192,7 +192,7 @@ const Home = () => {
                 key={feature.title}
                 variants={staggerItemVariants}
                 whileHover={prefersReducedMotion ? {} : { scale: 1.05, y: -8 }}
-                className="glass p-8 rounded-2xl group cursor-pointer hover:glow transition"
+                className="glass-card p-8 rounded-2xl group cursor-pointer hover:neon-border transition duration-300"
               >
                 <motion.div
                   initial={{ scale: 1 }}
@@ -215,7 +215,7 @@ const Home = () => {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="glass p-12 rounded-3xl max-w-2xl mx-auto"
+          className="glass-card p-12 rounded-3xl max-w-2xl mx-auto neon-border"
         >
           <h2 className="text-3xl font-bold mb-4 text-gradient">Ready to compete?</h2>
           <p className="text-gray-400 mb-8">Start your CodeQuest journey today and challenge programmers worldwide.</p>

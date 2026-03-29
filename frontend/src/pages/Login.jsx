@@ -140,7 +140,7 @@ const Login = () => {
         initial={{ opacity: 0, y: 24, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-        className="glass p-8 rounded-3xl max-w-2xl w-full mx-auto shadow-2xl"
+        className="glass-card p-8 rounded-3xl max-w-2xl w-full mx-auto shadow-2xl neon-border"
       >
         <motion.div
           variants={staggerContainerVariants}
@@ -296,7 +296,7 @@ const Login = () => {
                 ? undefined
                 : { y: -6, boxShadow: "0 10px 25px rgba(0,0,0,0.35)", transition: { duration: 0.25 } }
             }
-            className="glass p-4 rounded-2xl border border-dark-700"
+            className="glass-card p-4 rounded-2xl border border-white/5 hover:neon-border transition duration-300"
           >
             <div className="text-2xl mb-2">{card.icon}</div>
             <h3 className="font-semibold text-lg mb-2">{card.title}</h3>
