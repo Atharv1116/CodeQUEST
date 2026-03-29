@@ -4,7 +4,7 @@ import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import Editor from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Users, Clock, Send, Play, Shield, Skull, Crown, ChevronRight, Award, Zap } from 'lucide-react';
+import { Trophy, Users, Clock, Send, Play, Shield, Skull, Crown, ChevronRight, Award, Zap, Lightbulb } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -27,6 +27,9 @@ const BattleRoyaleMatch = () => {
   const [eliminationSchedule, setEliminationSchedule] = useState([]);
   const [evaluating, setEvaluating] = useState(false);
   const [editorLocked, setEditorLocked] = useState(false);
+  const [aiFeedback, setAiFeedback] = useState('');
+  const [aiHintLoading, setAiHintLoading] = useState(false);
+  const [hintsRemaining, setHintsRemaining] = useState(3);
   const [matchStatus, setMatchStatus] = useState('active'); // active | between-rounds | finished
   const [mySolved, setMySolved] = useState(false);
 
@@ -205,6 +208,17 @@ const BattleRoyaleMatch = () => {
       }
     };
 
+    const handleAiFeedback = ({ feedback }) => {
+      setAiHintLoading(false);
+      setAiFeedback(feedback);
+    };
+
+    const handleHintReceived = ({ hint, hintsRemaining: newHintsRemaining }) => {
+      setAiHintLoading(false);
+      if (newHintsRemaining !== undefined) setHintsRemaining(newHintsRemaining);
+      setAiFeedback(hint || 'No hint available.');
+    };
+
     socket.on('br-match-started', onMatchStarted);
     socket.on('br-leaderboard-update', onLeaderboardUpdate);
     socket.on('br-round-ended', onRoundEnded);
@@ -215,6 +229,8 @@ const BattleRoyaleMatch = () => {
     socket.on('evaluation-result', onEvaluationResult);
     socket.on('match-locked', onMatchLocked);
     socket.on('br-countdown', onCountdown);
+    socket.on('ai-feedback', handleAiFeedback);
+    socket.on('hint-received', handleHintReceived);
 
     return () => {
       socket.off('br-match-started', onMatchStarted);
@@ -227,6 +243,8 @@ const BattleRoyaleMatch = () => {
       socket.off('evaluation-result', onEvaluationResult);
       socket.off('match-locked', onMatchLocked);
       socket.off('br-countdown', onCountdown);
+      socket.off('ai-feedback', handleAiFeedback);
+      socket.off('hint-received', handleHintReceived);
     };
   }, [socket, roomId]);
 
@@ -249,6 +267,12 @@ const BattleRoyaleMatch = () => {
       roomId, code, language_id: languageId,
       isSubmit: true
     });
+  };
+
+  const requestHint = () => {
+    if (editorLocked || hintsRemaining <= 0 || aiHintLoading) return;
+    setAiHintLoading(true);
+    socket.emit('request-hint', { roomId });
   };
 
   // ── Timer formatting ──────────────────────────────────
@@ -453,6 +477,21 @@ const BattleRoyaleMatch = () => {
                   </div>
                 </div>
               )}
+              
+              {/* AI Feedback */}
+              {aiFeedback && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4 bg-purple-900/20 border-l-4 border-purple-500 p-3 rounded-lg border-y border-r border-purple-500/20"
+                >
+                  <h4 className="font-semibold text-purple-400 mb-1.5 flex items-center text-xs">
+                    <Lightbulb size={14} className="mr-1.5" />
+                    AI Tutor Feedback
+                  </h4>
+                  <p className="text-gray-300 text-xs leading-relaxed">{aiFeedback}</p>
+                </motion.div>
+              )}
             </div>
 
             {/* Language Selector + Editor */}
@@ -472,6 +511,12 @@ const BattleRoyaleMatch = () => {
                   </select>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button onClick={requestHint}
+                    disabled={editorLocked || hintsRemaining <= 0 || aiHintLoading}
+                    className="flex items-center space-x-1.5 text-purple-400 hover:text-purple-300 transition text-sm px-3 py-1.5 rounded hover:bg-purple-900/30 disabled:opacity-40">
+                    <Lightbulb className="w-4 h-4" />
+                    <span className="font-medium whitespace-nowrap">{aiHintLoading ? '...' : `Hint (${hintsRemaining})`}</span>
+                  </button>
                   <button
                     onClick={runCode}
                     disabled={evaluating || editorLocked}

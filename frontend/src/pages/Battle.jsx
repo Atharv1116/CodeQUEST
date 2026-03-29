@@ -825,7 +825,7 @@ const Battle = () => {
           matchResult?.ratingChanges?.[0];
         const delta = myRatingRow ? (myRatingRow.delta ?? (myRatingRow.after - myRatingRow.before)) : null;
         return (
-          <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-[100]">
             <motion.div
               initial={{ scale: 0.85, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -1071,6 +1071,12 @@ const Battle = () => {
                   className="bg-primary text-dark-900 px-4 py-1.5 rounded-md text-xs font-semibold tracking-widest hover:bg-cyan-400 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary/20">
                   {executionIntent === 'run' && isExecuting ? 'RUNNING' : 'RUN'}
                 </button>
+                <button
+                  onClick={() => executeCode('submit')}
+                  disabled={isExecuting || !hasRunnableCode || editorLocked}
+                  className="bg-green-500 text-white px-4 py-1.5 rounded-md text-xs font-semibold tracking-widest hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-500/20">
+                  {executionIntent === 'submit' && isExecuting ? 'SUBMITTING' : editorLocked ? 'LOCKED 🔒' : 'SUBMIT'}
+                </button>
               </div>
             </div>
             <div className="flex-1 min-h-0 bg-dark-900">
@@ -1133,16 +1139,7 @@ const Battle = () => {
                       {output || 'Run results will appear here...'}
                     </pre>
                   </div>
-                  {/* Submit Button - Always visible at bottom */}
-                  <div className="bg-dark-900 border-t border-dark-700 px-4 py-2.5 flex justify-end space-x-2 flex-shrink-0">
-                    <button
-                      onClick={() => executeCode('submit')}
-                      disabled={isExecuting || !hasRunnableCode || editorLocked}
-                      className="bg-primary text-dark-900 px-6 py-2 rounded-md text-sm font-semibold hover:bg-cyan-400 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary/20"
-                    >
-                      {executionIntent === 'submit' && isExecuting ? 'Submitting...' : editorLocked ? 'Locked 🔒' : 'Submit'}
-                    </button>
-                  </div>
+                  {/* Submit Button moved to top header */}
                 </div>
               )}
 
