@@ -90,7 +90,7 @@ const customRoomSchema = new mongoose.Schema({
     expiresAt: {
         type: Date,
         default: function () {
-            return new Date(Date.now() + 30 * 60 * 1000); // 30 minutes from now
+            return new Date(Date.now() + 180 * 60 * 1000); // 180 minutes from now
         },
         index: true
     }
