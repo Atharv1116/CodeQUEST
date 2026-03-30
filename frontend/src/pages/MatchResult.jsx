@@ -40,9 +40,13 @@ const MatchResult = () => {
   const xpGained = isWin ? matchResult?.xpChanges?.winner?.xp : matchResult?.xpChanges?.loser?.xp;
   const coinsGained = isWin ? matchResult?.xpChanges?.winner?.coins : matchResult?.xpChanges?.loser?.coins;
 
+  // Winner's solve time (shown for both winner and loser — it's the match solve time)
   const solveMs = matchResult?.stats?.winner?.solveTimeMs;
-  const solveSec = solveMs ? Math.round(solveMs / 1000) : null;
-  const attempts = matchResult?.stats?.winner?.attempts ?? '?';
+  const solveSec = (solveMs != null && solveMs > 0) ? Math.round(solveMs / 1000) : null;
+  // Show the viewer's own attempts
+  const attempts = isWin
+    ? (matchResult?.stats?.winner?.attempts ?? '?')
+    : (matchResult?.stats?.loser?.attempts ?? '?');
 
   // Visual Theme mapping based on outcome
   const theme = isWin 

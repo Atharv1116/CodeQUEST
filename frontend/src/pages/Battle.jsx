@@ -120,6 +120,9 @@ const Battle = () => {
   // so we store it in a ref to prevent useEffect cleanup from canceling timers.
   const navigateRef = useRef(navigate);
   useEffect(() => { navigateRef.current = navigate; }, [navigate]);
+  // Track timer duration (set by match-found) and solve data for the fallback
+  const timerDurationRef = useRef(DEFAULT_TIMER);
+  const winnerSolveDataRef = useRef(null); // { solveTimeMs, attempts }
   const currentLanguageConfig = LANGUAGE_CONFIG[language] || LANGUAGE_CONFIG.python;
   const currentCode = codeMap[language] ?? '';
   const hasRunnableCode = currentCode.trim().length > 0;
@@ -134,7 +137,10 @@ const Battle = () => {
     const handleMatchFound = (data) => {
       console.log('[Battle] Received match-found:', data);
       if (data.question) setQuestion(data.question);
-      if (data.timerDuration) setTimeLeft(data.timerDuration);
+      if (data.timerDuration) {
+        setTimeLeft(data.timerDuration);
+        timerDurationRef.current = data.timerDuration;
+      }
       if (data.type === '2v2') {
         setMatchType('2v2');
         setMyTeam(data.team || null);
@@ -291,14 +297,19 @@ const Battle = () => {
 
     const handleEvalStarted = ({ message }) => setOutput(message || 'Evaluating...');
 
-    const handleEvalResult = ({ ok, correct, details, message, isRun }) => {
+    const handleEvalResult = ({ ok, correct, details, message, isRun, attempt }) => {
       setIsExecuting(false);
       setExecutionIntent(null);
       if (ok && correct) {
         if (!isRun) {
           // Successful SUBMIT (not run) — this player won.
-          // Flag it so the fallback timer can force-navigate if match-finished is lost.
-          console.log('[Battle] evaluation-result: correct submit detected — flagging winner');
+          // Capture solve data NOW so the fallback can use it.
+          const elapsedSec = timerDurationRef.current - (timeLeft || 0);
+          winnerSolveDataRef.current = {
+            solveTimeMs: elapsedSec * 1000,
+            attempts: attempt || 1
+          };
+          console.log('[Battle] evaluation-result: correct submit detected — flagging winner, solveTime:', elapsedSec, 's');
           setCorrectlySubmitted(true);
         }
         setOutput(isRun
@@ -423,24 +434,45 @@ const Battle = () => {
   }, [matchFinished, winner]); // NO navigate — uses navigateRef
 
   // FALLBACK: If we submitted correctly (winner) but match-finished event never arrived
-  // from the server, force-trigger navigation after 5 seconds.
+  // from the server, force-trigger navigation after 5 seconds with computed data.
   useEffect(() => {
     if (correctlySubmitted && !matchFinished) {
       console.log('[Battle] Correct submit detected but match-finished not yet received — starting 5s fallback');
       const fallbackTimer = setTimeout(() => {
         console.warn('[Battle] FALLBACK: match-finished event never arrived — forcing winner navigation');
+        // Compute XP/coins using the same formulas as the server
+        const diff = question?.difficulty || 'easy';
+        const mode = matchType || '1v1';
+        const diffXP = { easy: 10, medium: 25, hard: 50 };
+        const typeMul = { '1v1': 1, '2v2': 1.2, 'battle-royale': 1.5 };
+        const winXP = Math.round((diffXP[diff] || 10) * (typeMul[mode] || 1) * 2);
+        const lossXP = Math.round((diffXP[diff] || 10) * (typeMul[mode] || 1));
+        const diffCoins = { easy: 10, medium: 25, hard: 50 };
+        const winCoins = Math.round((diffCoins[diff] || 10) * 2);
+        const lossCoins = Math.round(diffCoins[diff] || 10);
+        const solveData = winnerSolveDataRef.current || {};
+
         setMatchFinished(true);
         setWinner('you');
         setMatchResult(prev => prev || {
-          message: 'You submitted the correct answer!',
-          xpChanges: {},
+          roomId,
+          type: mode,
+          draw: false,
+          message: '✅ Correct submission! Match over.',
+          xpChanges: {
+            winner: { xp: winXP, coins: winCoins },
+            loser: { xp: lossXP, coins: lossCoins }
+          },
           ratingChanges: [],
-          stats: { winner: {}, loser: {} }
+          stats: {
+            winner: { solveTimeMs: solveData.solveTimeMs || null, attempts: solveData.attempts || 1, accuracy: 100 },
+            loser: { solveTimeMs: null, attempts: 0, accuracy: 0 }
+          }
         });
       }, 5000);
       return () => clearTimeout(fallbackTimer);
     }
-  }, [correctlySubmitted, matchFinished]);
+  }, [correctlySubmitted, matchFinished, question, matchType, roomId]);
 
   useEffect(() => {
     if (matchFinished && pendingNavigation) {
