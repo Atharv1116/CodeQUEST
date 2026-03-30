@@ -97,6 +97,7 @@ const Battle = () => {
   const [activeTab, setActiveTab] = useState('output');
   const [timeLeft, setTimeLeft] = useState(DEFAULT_TIMER);
   const [pendingNavigation, setPendingNavigation] = useState(null);
+  const [correctlySubmitted, setCorrectlySubmitted] = useState(false); // true when winner gets correct eval
   // 2v2 team state
   const [matchType, setMatchType] = useState('1v1');
   const [myTeam, setMyTeam] = useState(null); // 'blue' or 'red'
@@ -115,6 +116,10 @@ const Battle = () => {
   useEffect(() => { matchTypeRef.current = matchType; }, [matchType]);
   useEffect(() => { teammatesRef.current = teammates; }, [teammates]);
   useEffect(() => { userRef.current = user; }, [user]);
+  // Stable navigate ref — React Router's navigate() is NOT referentially stable,
+  // so we store it in a ref to prevent useEffect cleanup from canceling timers.
+  const navigateRef = useRef(navigate);
+  useEffect(() => { navigateRef.current = navigate; }, [navigate]);
   const currentLanguageConfig = LANGUAGE_CONFIG[language] || LANGUAGE_CONFIG.python;
   const currentCode = codeMap[language] ?? '';
   const hasRunnableCode = currentCode.trim().length > 0;
@@ -154,7 +159,14 @@ const Battle = () => {
 
     // CRITICAL: Use winnerUserId (user ID from DB) for reliable comparison instead of socket.id
     // Read user via userRef so the closure is never stale and the effect doesn't re-run
+    // Guard: server may send match-finished multiple times for reliability; only process the first
+    let matchFinishedProcessed = false;
     const handleMatchFinished = (data) => {
+      if (matchFinishedProcessed) {
+        console.log('[Battle] Duplicate match-finished ignored');
+        return;
+      }
+      matchFinishedProcessed = true;
       const currentUser = userRef.current;
       console.log('[Battle] match-finished received, data.winnerUserId:', data.winnerUserId, 'data.loserUserId:', data.loserUserId, 'user.id:', currentUser?.id, 'data.winnerTeam:', data.winnerTeam);
       setMatchFinished(true);
@@ -283,6 +295,12 @@ const Battle = () => {
       setIsExecuting(false);
       setExecutionIntent(null);
       if (ok && correct) {
+        if (!isRun) {
+          // Successful SUBMIT (not run) — this player won.
+          // Flag it so the fallback timer can force-navigate if match-finished is lost.
+          console.log('[Battle] evaluation-result: correct submit detected — flagging winner');
+          setCorrectlySubmitted(true);
+        }
         setOutput(isRun
           ? `✅ Code runs correctly! (click Submit to finalize)\n${JSON.stringify(details, null, 2)}`
           : `✅ Correct!\n${JSON.stringify(details, null, 2)}`);
@@ -375,37 +393,61 @@ const Battle = () => {
   const latestMatchResult = useRef(null);
   const latestQuestion = useRef(null);
   const navigationStarted = useRef(false);
+  const latestWinner = useRef(null);
 
   useEffect(() => {
     latestMatchResult.current = matchResult;
     latestQuestion.current = question;
   }, [matchResult, question]);
+  useEffect(() => { latestWinner.current = winner; }, [winner]);
 
   // Handle Match Finish Navigation (guaranteed 1-time trigger)
+  // CRITICAL: navigate is NOT in the dep array — it's unstable in React Router
+  // and would cancel the timer on every re-render. We use navigateRef instead.
   useEffect(() => {
     if (matchFinished && winner !== null && !navigationStarted.current) {
       navigationStarted.current = true;
-      // Add a 2.5s delay so 'rating-update' has time to backfill 
-      // and the user can see 'Match Locked' briefly
+      console.log('[Battle] Navigation timer started — redirecting to /match-result in 2.5s, winner:', winner);
       const timer = setTimeout(() => {
-        navigate('/match-result', { 
+        console.log('[Battle] Navigating NOW to /match-result');
+        navigateRef.current('/match-result', { 
           state: { 
             matchResult: latestMatchResult.current, 
-            winner, 
+            winner: latestWinner.current, 
             questionTitle: latestQuestion.current?.title 
           } 
         });
       }, 2500);
       return () => clearTimeout(timer);
     }
-  }, [matchFinished, winner, navigate]);
+  }, [matchFinished, winner]); // NO navigate — uses navigateRef
+
+  // FALLBACK: If we submitted correctly (winner) but match-finished event never arrived
+  // from the server, force-trigger navigation after 5 seconds.
+  useEffect(() => {
+    if (correctlySubmitted && !matchFinished) {
+      console.log('[Battle] Correct submit detected but match-finished not yet received — starting 5s fallback');
+      const fallbackTimer = setTimeout(() => {
+        console.warn('[Battle] FALLBACK: match-finished event never arrived — forcing winner navigation');
+        setMatchFinished(true);
+        setWinner('you');
+        setMatchResult(prev => prev || {
+          message: 'You submitted the correct answer!',
+          xpChanges: {},
+          ratingChanges: [],
+          stats: { winner: {}, loser: {} }
+        });
+      }, 5000);
+      return () => clearTimeout(fallbackTimer);
+    }
+  }, [correctlySubmitted, matchFinished]);
 
   useEffect(() => {
     if (matchFinished && pendingNavigation) {
-      navigate(pendingNavigation);
+      navigateRef.current(pendingNavigation);
       setPendingNavigation(null);
     }
-  }, [matchFinished, pendingNavigation, navigate]);
+  }, [matchFinished, pendingNavigation]);
 
   const executeCode = (intent = 'run') => {
     if (!hasRunnableCode || isExecuting || !socket || editorLocked) return;

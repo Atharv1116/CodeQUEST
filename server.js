@@ -1416,6 +1416,9 @@ io.on('connection', (socket) => {
     };
     console.log(`[Server] emitMatchFinished1v1 → room ${roomId}, winnerUserId=${winnerUserId}, loserUserId=${loserUserId}`);
     io.to(roomId).emit('match-finished', payload);
+    // REDUNDANT direct emits — guarantees delivery even if room membership has issues
+    if (winnerId) io.to(winnerId).emit('match-finished', payload);
+    if (opponentId) io.to(opponentId).emit('match-finished', payload);
 
     // Delay cleanup so reconnecting clients can still recover state
     setTimeout(() => {
@@ -1454,6 +1457,9 @@ io.on('connection', (socket) => {
     };
     console.log(`[Server] emitMatchFinished2v2 → room ${roomId}, team=${teamName}, winnerIds=${winningTeamIds}`);
     io.to(roomId).emit('match-finished', payload);
+    // REDUNDANT direct emits — guarantees delivery to every player
+    const allSocketIds = [...(state.teams[teamName] || []), ...(state.teams[losingTeamName] || [])];
+    allSocketIds.forEach(sid => io.to(sid).emit('match-finished', payload));
 
     // Delay cleanup
     setTimeout(() => {
