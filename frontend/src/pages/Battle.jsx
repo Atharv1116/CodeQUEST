@@ -372,23 +372,33 @@ const Battle = () => {
     };
   }, [matchFinished]);
 
-  // Handle Match Finish Navigation
+  const latestMatchResult = useRef(null);
+  const latestQuestion = useRef(null);
+  const navigationStarted = useRef(false);
+
   useEffect(() => {
-    if (matchFinished && winner !== null) {
-      // Add a 2s delay so 'rating-update' has time to backfill 
+    latestMatchResult.current = matchResult;
+    latestQuestion.current = question;
+  }, [matchResult, question]);
+
+  // Handle Match Finish Navigation (guaranteed 1-time trigger)
+  useEffect(() => {
+    if (matchFinished && winner !== null && !navigationStarted.current) {
+      navigationStarted.current = true;
+      // Add a 2.5s delay so 'rating-update' has time to backfill 
       // and the user can see 'Match Locked' briefly
       const timer = setTimeout(() => {
         navigate('/match-result', { 
           state: { 
-            matchResult, 
+            matchResult: latestMatchResult.current, 
             winner, 
-            questionTitle: question?.title 
+            questionTitle: latestQuestion.current?.title 
           } 
         });
       }, 2500);
       return () => clearTimeout(timer);
     }
-  }, [matchFinished, matchResult, winner, question, navigate]);
+  }, [matchFinished, winner, navigate]);
 
   useEffect(() => {
     if (matchFinished && pendingNavigation) {
