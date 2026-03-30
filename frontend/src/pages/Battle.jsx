@@ -163,7 +163,7 @@ const Battle = () => {
 
       if (data.draw) {
         console.log('[Battle] Draw — showing draw modal');
-        setShowDrawModal(true);
+        setWinner('draw');
         return;
       }
 
@@ -184,13 +184,8 @@ const Battle = () => {
         }
       }
 
-      console.log('[Battle] didIWin:', didIWin, '— opening', didIWin ? 'WON' : 'LOST', 'modal');
+      console.log('[Battle] didIWin:', didIWin, '— rendering match result');
       setWinner(didIWin ? 'you' : 'opponent');
-      if (didIWin) {
-        setShowWonModal(true);
-      } else {
-        setShowLostModal(true);
-      }
 
       if (data.message) {
         setChat(prev => [...prev, { user: 'System', message: data.message, type: 'system' }]);
@@ -200,15 +195,14 @@ const Battle = () => {
     const handleOpponentLeft = () => {
       console.log('[Battle] opponent-left-match — auto-win');
       setMatchFinished(true);
-      setMatchResult(null);
+      setMatchResult({ message: 'Opponent disconnected.' });
       setWinner('you');
-      setShowWonModal(true);
     };
 
     const handleYouLeft = () => {
       setMatchFinished(true);
+      setMatchResult({ message: 'You left the match.' });
       setWinner('opponent');
-      setShowLostModal(true);
     };
 
     // room-state: server sends this after join-room if a match is already in progress
@@ -237,10 +231,7 @@ const Battle = () => {
       const didIWin = (data.winners && myUserId) ? data.winners.map(id => id.toString()).includes(myUserId) : (!data.forfeitingUserId || data.forfeitingUserId.toString() !== myUserId);
       setWinner(didIWin ? 'you' : 'opponent');
       if (didIWin) {
-        setShowWonModal(true);
         setChat(prev => [...prev, { user: 'System', message: 'Opponent forfeited! You win! 🎉', type: 'system' }]);
-      } else {
-        setShowLostModal(true);
       }
     };
 
@@ -381,6 +372,24 @@ const Battle = () => {
     };
   }, [matchFinished]);
 
+  // Handle Match Finish Navigation
+  useEffect(() => {
+    if (matchFinished && winner !== null) {
+      // Add a 2s delay so 'rating-update' has time to backfill 
+      // and the user can see 'Match Locked' briefly
+      const timer = setTimeout(() => {
+        navigate('/match-result', { 
+          state: { 
+            matchResult, 
+            winner, 
+            questionTitle: question?.title 
+          } 
+        });
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [matchFinished, matchResult, winner, question, navigate]);
+
   useEffect(() => {
     if (matchFinished && pendingNavigation) {
       navigate(pendingNavigation);
@@ -470,9 +479,9 @@ const Battle = () => {
     if (!socket || !roomId) return;
     setShowLeaveConfirm(false);
     socket.emit('leave-match', { roomId });
-    // Show lost modal and navigate
-    setShowLostModal(true);
+    // Navigate via the unified MatchFinished effect
     setMatchFinished(true);
+    setWinner('opponent');
   }, [socket, roomId]);
 
   const cancelLeave = useCallback(() => {
@@ -480,37 +489,8 @@ const Battle = () => {
     setPendingNavigation(null);
   }, []);
 
-  const handleLostOk = () => {
-    setShowLostModal(false);
-    const destination = pendingNavigation || '/lobby';
-    setPendingNavigation(null);
-    navigate(destination);
-  };
-
-  const handleWonReturnHome = () => {
-    setShowWonModal(false);
-    setPendingNavigation(null);
-    navigate('/lobby');
-  };
-
   const handleWonSeeAnalysis = async () => {
-    setShowWonModal(false);
-    setShowAnalysisScreen(true);
-    if (!matchResult?.matchId) return;
-    setAiAnalysisLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-      const resp = await axios.get(`${API_URL}/api/match/${matchResult.matchId}/ai-analysis`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (resp.data.ok) setAiAnalysis(resp.data);
-    } catch (e) {
-      console.error('[Battle] AI analysis fetch failed:', e);
-      setAiAnalysis({ analysis: 'Analysis unavailable. Check your code for edge cases and optimizations.' });
-    } finally {
-      setAiAnalysisLoading(false);
-    }
+    // Legacy function, no longer used in Battle (moved to MatchResult)
   };
 
   // Handle leave match request from navbar
@@ -697,19 +677,22 @@ const Battle = () => {
     );
   }
 
-  if (matchFinished && !showWonModal && !showLostModal && !showDrawModal) {
+  if (matchFinished) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dark-900">
+      <div className="min-h-screen flex items-center justify-center bg-dark-900 overflow-hidden relative">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/20 rounded-full blur-[100px] opacity-30 animate-pulse pointer-events-none" />
         <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-          className="glass p-12 rounded-lg text-center max-w-2xl">
-          <Trophy className="text-primary mx-auto mb-4" size={80} />
-          <h2 className="text-4xl font-bold mb-4 text-gradient">
-            {winner === 'you' ? 'Victory!' : 'Defeat'}
+          className="glass p-12 rounded-2xl text-center max-w-2xl border border-primary/30 shadow-[0_0_50px_rgba(0,0,0,0.5)] z-10">
+          <Trophy className="text-primary mx-auto mb-6 animate-bounce" size={80} />
+          <h2 className="text-5xl font-black mb-4 text-primary tracking-widest uppercase shadow-primary/20">
+            MATCH FINISHED
           </h2>
-          <button onClick={() => navigate('/lobby')}
-            className="bg-primary text-dark-900 px-8 py-3 rounded-lg font-semibold hover:bg-cyan-400 transition">
-            Return to Lobby
-          </button>
+          <p className="text-gray-400 text-lg uppercase tracking-widest font-semibold mt-4">
+            Calculating results...
+          </p>
+          <div className="mt-8 flex justify-center">
+            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin shadow-lg"></div>
+          </div>
         </motion.div>
       </div>
     );
@@ -758,154 +741,7 @@ const Battle = () => {
         </div>
       )}
 
-      {/* Draw Modal */}
-      {showDrawModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-            className="glass p-8 rounded-lg max-w-md w-full mx-4 text-center">
-            <Minus className="text-gray-400 mx-auto mb-4" size={60} />
-            <h3 className="text-3xl font-bold mb-2 text-gray-300">⏰ Draw</h3>
-            <p className="text-gray-400 mb-4">{matchResult?.message || "Time's up! It's a draw."}</p>
-            <button onClick={() => { setShowDrawModal(false); navigate('/lobby'); }}
-              className="bg-primary text-dark-900 px-8 py-3 rounded-lg font-semibold hover:bg-cyan-400 transition">
-              Return to Lobby
-            </button>
-          </motion.div>
-        </div>
-      )}
 
-      {/* Lost Modal — Fix 13: Enriched with XP info */}
-      {showLostModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-            className="glass p-8 rounded-lg max-w-md w-full mx-4 text-center">
-            <h3 className="text-3xl font-bold mb-2 text-red-400">❌ You Lost</h3>
-            <p className="text-gray-300 mb-4">
-              {winner === 'opponent' ? 'Your opponent solved the problem first.' : 'You left the match.'}
-            </p>
-            {/* XP/Coins display */}
-            {matchResult?.xpChanges?.loser && (
-              <div className="mb-4 p-3 bg-dark-700/60 rounded-lg border border-dark-600">
-                <div className="flex items-center justify-center gap-6 text-sm">
-                  <div className="text-center">
-                    <p className="text-xs text-gray-400">XP Gained</p>
-                    <p className="text-lg font-bold text-yellow-400">+{matchResult.xpChanges.loser.xp}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-400">Coins</p>
-                    <p className="text-lg font-bold text-yellow-400">+{matchResult.xpChanges.loser.coins}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-            {matchResult?.ratingChanges?.length > 0 && (
-              <div className="mb-6 p-3 bg-dark-700/60 rounded-lg border border-dark-600">
-                <p className="text-xs text-gray-400 mb-2">Rating Change</p>
-                {matchResult.ratingChanges.map((r, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-300">{r.username || 'You'}</span>
-                    <span className={`font-bold ${(r.delta ?? (r.after - r.before)) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {(r.delta ?? (r.after - r.before)) >= 0 ? '+' : ''}{r.delta ?? (r.after - r.before)} → {r.after ?? r.newRating}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <button onClick={handleLostOk}
-              className="bg-primary text-dark-900 px-8 py-3 rounded-lg font-semibold hover:bg-cyan-400 transition">
-              🏠 Return to Lobby
-            </button>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Won Modal — two-button victory popup */}
-      {showWonModal && (() => {
-        const myRatingRow = matchResult?.ratingChanges?.find(r => (r.delta ?? 0) > 0) ||
-          matchResult?.ratingChanges?.[0];
-        const delta = myRatingRow ? (myRatingRow.delta ?? (myRatingRow.after - myRatingRow.before)) : null;
-        return (
-          <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-[100]">
-            <motion.div
-              initial={{ scale: 0.85, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              transition={{ type: 'spring', damping: 18 }}
-              className="glass rounded-2xl max-w-sm w-full mx-4 overflow-hidden">
-
-              {/* Gradient top bar */}
-              <div className="h-2 bg-gradient-to-r from-primary via-cyan-400 to-primary" />
-
-              <div className="p-7 text-center">
-                {/* Trophy animation */}
-                <motion.div
-                  initial={{ scale: 0, rotate: -20 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
-                  className="text-6xl mb-3">🏆</motion.div>
-
-                <h3 className="text-3xl font-extrabold text-primary mb-1">You Won!</h3>
-                <p className="text-gray-400 text-sm mb-5">Excellent solve — you beat your opponent!</p>
-
-                {/* Quick stats + XP — Fix 13: enriched with XP/coins */}
-                <div className="flex justify-center gap-6 mb-5">
-                  {matchResult?.stats?.winner?.solveTimeMs && (
-                    <div className="text-center">
-                      <p className="text-xl font-bold text-white">
-                        {matchResult.stats.winner.solveTimeMs >= 60000
-                          ? `${Math.floor(matchResult.stats.winner.solveTimeMs / 60000)}m ${Math.round((matchResult.stats.winner.solveTimeMs % 60000) / 1000)}s`
-                          : `${Math.round(matchResult.stats.winner.solveTimeMs / 1000)}s`}
-                      </p>
-                      <p className="text-xs text-gray-500">Solve Time</p>
-                    </div>
-                  )}
-                  {matchResult?.stats?.winner?.attempts !== undefined && (
-                    <div className="text-center">
-                      <p className="text-xl font-bold text-white">{matchResult.stats.winner.attempts}</p>
-                      <p className="text-xs text-gray-500">Attempt(s)</p>
-                    </div>
-                  )}
-                  {delta !== null && (
-                    <div className="text-center">
-                      <p className={`text-xl font-bold ${delta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {delta >= 0 ? '+' : ''}{delta}
-                      </p>
-                      <p className="text-xs text-gray-500">Rating</p>
-                    </div>
-                  )}
-                  {matchResult?.xpChanges?.winner && (
-                    <div className="text-center">
-                      <p className="text-xl font-bold text-yellow-400">+{matchResult.xpChanges.winner.xp}</p>
-                      <p className="text-xs text-gray-500">XP</p>
-                    </div>
-                  )}
-                  {matchResult?.xpChanges?.winner && (
-                    <div className="text-center">
-                      <p className="text-xl font-bold text-yellow-400">+{matchResult.xpChanges.winner.coins}</p>
-                      <p className="text-xs text-gray-500">Coins</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Action buttons */}
-                <div className="flex flex-col gap-3">
-                  <button
-                    onClick={handleWonSeeAnalysis}
-                    className="w-full bg-primary text-dark-900 py-3 rounded-xl font-bold hover:bg-cyan-400 transition text-sm tracking-wide"
-                  >
-                    📊 See Full Analysis
-                  </button>
-                  <button
-                    onClick={handleWonReturnHome}
-                    className="w-full bg-dark-700 border border-dark-600 text-gray-300 py-3 rounded-xl font-semibold hover:bg-dark-600 transition text-sm"
-                  >
-                    🏠 Return to Lobby
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        );
-      })()}
 
       <div className="flex-1 flex overflow-hidden border-t border-dark-700">
         {/* Left Panel - Question Section (LeetCode style) */}

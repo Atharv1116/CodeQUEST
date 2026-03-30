@@ -18,6 +18,7 @@ import BattleRoyaleAdmin from './pages/BattleRoyaleAdmin';
 import Dashboard from './pages/Dashboard';
 import Leaderboard from './pages/Leaderboard';
 import AITutor from './pages/AITutor';
+import MatchResult from './pages/MatchResult';
 import './App.css';
 
 function App() {
@@ -148,6 +149,16 @@ function App() {
                   <ProtectedRoute>
                     <PageTransition>
                       <AITutor />
+                    </PageTransition>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/match-result"
+                element={
+                  <ProtectedRoute>
+                    <PageTransition>
+                      <MatchResult />
                     </PageTransition>
                   </ProtectedRoute>
                 }
