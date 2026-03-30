@@ -2,23 +2,41 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Trophy, TrendingUp, TrendingDown, Minus, Clock, Target, Zap, Coins, Lightbulb } from 'lucide-react';
+import { useSocket } from '../contexts/SocketContext';
 import axios from 'axios';
 
 const MatchResult = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { matchResult, winner: winnerState, questionTitle } = location.state || {};
+  const socket = useSocket();
+  const { matchResult: initialMatchResult, winner: winnerState, questionTitle } = location.state || {};
 
+  const [matchResult, setMatchResult] = useState(initialMatchResult || null);
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
 
+  // Listen for late-arriving rating-update events (server pipeline may complete after navigation)
+  useEffect(() => {
+    if (!socket) return;
+    const handleRatingUpdate = ({ matchId, ratingChanges }) => {
+      console.log('[MatchResult] Late rating-update received:', matchId, ratingChanges);
+      setMatchResult(prev => prev ? {
+        ...prev,
+        matchId: matchId || prev.matchId,
+        ratingChanges: ratingChanges?.length > 0 ? ratingChanges : prev.ratingChanges
+      } : prev);
+    };
+    socket.on('rating-update', handleRatingUpdate);
+    return () => socket.off('rating-update', handleRatingUpdate);
+  }, [socket]);
+
   useEffect(() => {
     // Redirect back to lobby if no match result state is provided
-    if (!matchResult && !winnerState) {
+    if (!initialMatchResult && !winnerState) {
       navigate('/lobby');
     }
-  }, [matchResult, winnerState, navigate]);
+  }, [initialMatchResult, winnerState, navigate]);
 
   if (!matchResult && !winnerState) return null;
 

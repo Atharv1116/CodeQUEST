@@ -123,6 +123,9 @@ const Battle = () => {
   // Track timer duration (set by match-found) and solve data for the fallback
   const timerDurationRef = useRef(DEFAULT_TIMER);
   const winnerSolveDataRef = useRef(null); // { solveTimeMs, attempts }
+  const timeLeftRef = useRef(DEFAULT_TIMER); // always-current timer value for socket closures
+  const ratingUpdateRef = useRef(null); // captures rating-update even when matchResult is null
+  useEffect(() => { timeLeftRef.current = timeLeft; }, [timeLeft]);
   const currentLanguageConfig = LANGUAGE_CONFIG[language] || LANGUAGE_CONFIG.python;
   const currentCode = codeMap[language] ?? '';
   const hasRunnableCode = currentCode.trim().length > 0;
@@ -236,6 +239,8 @@ const Battle = () => {
     // rating-update: backfill real ratingChanges + matchId once DB pipeline completes
     const handleRatingUpdate = ({ matchId, ratingChanges }) => {
       console.log('[Battle] rating-update received, matchId:', matchId, 'changes:', ratingChanges);
+      // Always save to ref so the fallback can use it even if matchResult is still null
+      ratingUpdateRef.current = { matchId, ratingChanges };
       setMatchResult(prev => prev ? { ...prev, matchId: matchId || prev.matchId, ratingChanges: ratingChanges?.length > 0 ? ratingChanges : prev.ratingChanges } : prev);
     };
 
@@ -304,7 +309,8 @@ const Battle = () => {
         if (!isRun) {
           // Successful SUBMIT (not run) — this player won.
           // Capture solve data NOW so the fallback can use it.
-          const elapsedSec = timerDurationRef.current - (timeLeft || 0);
+          // Use timeLeftRef (always current) instead of stale timeLeft from closure.
+          const elapsedSec = timerDurationRef.current - (timeLeftRef.current || 0);
           winnerSolveDataRef.current = {
             solveTimeMs: elapsedSec * 1000,
             attempts: attempt || 1
@@ -451,6 +457,7 @@ const Battle = () => {
         const winCoins = Math.round((diffCoins[diff] || 10) * 2);
         const lossCoins = Math.round(diffCoins[diff] || 10);
         const solveData = winnerSolveDataRef.current || {};
+        const ratingData = ratingUpdateRef.current;
 
         setMatchFinished(true);
         setWinner('you');
@@ -458,12 +465,13 @@ const Battle = () => {
           roomId,
           type: mode,
           draw: false,
+          matchId: ratingData?.matchId || null,
           message: '✅ Correct submission! Match over.',
           xpChanges: {
             winner: { xp: winXP, coins: winCoins },
             loser: { xp: lossXP, coins: lossCoins }
           },
-          ratingChanges: [],
+          ratingChanges: ratingData?.ratingChanges || [],
           stats: {
             winner: { solveTimeMs: solveData.solveTimeMs || null, attempts: solveData.attempts || 1, accuracy: 100 },
             loser: { solveTimeMs: null, attempts: 0, accuracy: 0 }
