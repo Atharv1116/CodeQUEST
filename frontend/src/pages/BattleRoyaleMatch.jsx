@@ -32,6 +32,7 @@ const BattleRoyaleMatch = () => {
   const [hintsRemaining, setHintsRemaining] = useState(3);
   const [matchStatus, setMatchStatus] = useState('active'); // active | between-rounds | finished
   const [mySolved, setMySolved] = useState(false);
+  const [myEliminated, setMyEliminated] = useState(false);
 
   // Round results overlay
   const [showRoundResults, setShowRoundResults] = useState(false);
@@ -47,6 +48,8 @@ const BattleRoyaleMatch = () => {
 
   // Reconnection flag
   const hasRecovered = useRef(false);
+  const matchStatusRef = useRef('active');
+  useEffect(() => { matchStatusRef.current = matchStatus; }, [matchStatus]);
 
   // ── Find my team ──────────────────────────────────────
   const myTeam = useMemo(() => {
@@ -94,6 +97,17 @@ const BattleRoyaleMatch = () => {
     recoverState();
   }, [socket, user, roomId]);
 
+  // ── Emit leave-br-match on unmount (navigate away) ─────────
+  useEffect(() => {
+    if (!socket || !roomId) return;
+    return () => {
+      // Only emit if match isn't finished (don't spam on normal exit)
+      if (matchStatusRef.current !== 'finished') {
+        socket.emit('leave-br-match', { roomId });
+      }
+    };
+  }, [socket, roomId]);
+
   // ── Socket event handlers ─────────────────────────────
   useEffect(() => {
     if (!socket) return;
@@ -124,6 +138,10 @@ const BattleRoyaleMatch = () => {
       setMatchStatus('between-rounds');
       // Fix 15: Track whether we're waiting for admin
       setWaitingForAdmin(!!data.waitingForAdmin);
+      // Check if my team was eliminated
+      if (data.eliminated?.some(t => t.teamNumber === myTeam)) {
+        setMyEliminated(true);
+      }
     };
 
     const onRoundStarted = (data) => {
@@ -219,6 +237,14 @@ const BattleRoyaleMatch = () => {
       setAiFeedback(hint || 'No hint available.');
     };
 
+    const onPlayerLeft = ({ username, teamNumber }) => {
+      setOutput(prev => prev + `\n⚠️ ${username} (Team ${teamNumber}) left the match`);
+    };
+
+    const onKicked = () => {
+      navigate('/battle-royale-mode');
+    };
+
     socket.on('br-match-started', onMatchStarted);
     socket.on('br-leaderboard-update', onLeaderboardUpdate);
     socket.on('br-round-ended', onRoundEnded);
@@ -231,6 +257,8 @@ const BattleRoyaleMatch = () => {
     socket.on('br-countdown', onCountdown);
     socket.on('ai-feedback', handleAiFeedback);
     socket.on('hint-received', handleHintReceived);
+    socket.on('br-player-left', onPlayerLeft);
+    socket.on('kicked-from-room', onKicked);
 
     return () => {
       socket.off('br-match-started', onMatchStarted);
@@ -245,6 +273,8 @@ const BattleRoyaleMatch = () => {
       socket.off('br-countdown', onCountdown);
       socket.off('ai-feedback', handleAiFeedback);
       socket.off('hint-received', handleHintReceived);
+      socket.off('br-player-left', onPlayerLeft);
+      socket.off('kicked-from-room', onKicked);
     };
   }, [socket, roomId]);
 
@@ -851,6 +881,44 @@ const BattleRoyaleMatch = () => {
               >
                 {countdownSeconds}
               </motion.p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Eliminated Overlay — Only for eliminated players */}
+      <AnimatePresence>
+        {myEliminated && matchStatus !== 'finished' && !showRoundResults && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[55]"
+          >
+            <motion.div
+              initial={{ scale: 0.8, y: 30 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-gradient-to-br from-red-900/80 to-gray-900 rounded-2xl p-10 max-w-md w-full border-2 border-red-500/50 text-center shadow-2xl mx-4"
+            >
+              <motion.div
+                animate={{ scale: [1, 1.1, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                <Skull className="w-20 h-20 text-red-400 mx-auto mb-4" />
+              </motion.div>
+              <h2 className="text-3xl font-bold text-red-400 mb-2">ELIMINATED</h2>
+              <p className="text-gray-300 mb-2">
+                Your team (Team {myTeam}) has been eliminated in Round {round}.
+              </p>
+              <p className="text-gray-500 text-sm mb-8">
+                Better luck next time! Keep practicing to improve your skills.
+              </p>
+              <button
+                onClick={() => navigate('/battle-royale-mode')}
+                className="w-full px-8 py-4 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white rounded-xl font-bold text-lg transition-all hover:scale-105 shadow-lg shadow-red-500/30"
+              >
+                Return to Lobby
+              </button>
             </motion.div>
           </motion.div>
         )}
