@@ -59,7 +59,7 @@ const Leaderboard = () => {
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-12">
           <div className="flex items-center justify-center gap-3 mb-4">
             <TrendingUp className="text-primary" size={40} />
-            <h1 className="text-5xl font-heading tracking-wide text-gradient">Leaderboard</h1>
+            <h1 className="text-5xl font-bold text-gradient">Leaderboard</h1>
           </div>
           <p className="text-gray-400 text-lg max-w-2xl mx-auto">
             Compete globally or within your college. Climb the ranks and earn bragging rights.
@@ -71,7 +71,7 @@ const Leaderboard = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="glass-dark p-6 rounded-2xl mb-8 max-w-2xl mx-auto shadow-glow-sm"
+          className="glass p-6 rounded-2xl mb-8 max-w-2xl mx-auto"
         >
           <div className="flex flex-wrap gap-4 justify-center items-center">
             <button
@@ -100,7 +100,7 @@ const Leaderboard = () => {
                 value={college}
                 onChange={(e) => setCollege(e.target.value)}
                 placeholder="Enter college name"
-                className="input"
+                className="bg-dark-700 border border-primary/30 rounded-xl px-4 py-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
               />
             )}
           </div>
@@ -118,7 +118,7 @@ const Leaderboard = () => {
             variants={staggerContainerVariants}
             initial="hidden"
             animate="show"
-            className="glass-dark p-6 rounded-2xl max-w-4xl mx-auto shadow-glow-sm"
+            className="glass p-6 rounded-2xl max-w-4xl mx-auto"
           >
             <div className="space-y-2">
               {leaderboard.map((player, idx) => (
@@ -134,7 +134,7 @@ const Leaderboard = () => {
                   <div className="flex items-center space-x-4 flex-1">
                     <div className="w-12 text-center">{getRankIcon(idx + 1)}</div>
                     <div>
-                      <p className="font-heading tracking-wide font-bold text-lg text-gray-100">{player.username}</p>
+                      <p className="font-bold text-lg text-gray-100">{player.username}</p>
                       {player.college && <p className="text-sm text-gray-500">{player.college}</p>}
                     </div>
                   </div>

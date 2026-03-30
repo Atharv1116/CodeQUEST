@@ -54,17 +54,17 @@ const JoinRoomModal = ({ onClose, onJoin }) => {
 
     return (
         <AnimatePresence>
-            <div className="fixed inset-0 bg-background/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
-                    className="glass-dark rounded-2xl p-8 max-w-md w-full shadow-glow"
+                    className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-8 max-w-md w-full shadow-2xl border border-gray-700"
                 >
                     {/* Header */}
                     <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-2xl font-heading text-white flex items-center gap-2">
-                            <LogIn className="w-6 h-6 text-primary" />
+                        <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                            <LogIn className="w-6 h-6 text-blue-400" />
                             Join Room
                         </h2>
                         <button
@@ -86,7 +86,7 @@ const JoinRoomModal = ({ onClose, onJoin }) => {
                             onChange={handleCodeChange}
                             placeholder="Enter 6-character code"
                             maxLength={6}
-                            className="input w-full text-center text-2xl font-mono tracking-widest uppercase"
+                            className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white text-center text-2xl font-mono tracking-widest focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 transition-all"
                             autoFocus
                             disabled={joining}
                         />
@@ -100,25 +100,25 @@ const JoinRoomModal = ({ onClose, onJoin }) => {
                         <motion.div
                             initial={{ opacity: 0, y: -10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="mb-4 p-3 bg-danger/20 border border-danger/50 rounded-lg"
+                            className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg"
                         >
-                            <p className="text-danger text-sm text-center">{error}</p>
+                            <p className="text-red-400 text-sm text-center">{error}</p>
                         </motion.div>
                     )}
 
                     {/* Buttons */}
-                    <div className="flex gap-3 mt-8">
+                    <div className="flex gap-3">
                         <button
                             onClick={onClose}
                             disabled={joining}
-                            className="flex-1 px-6 py-3 bg-dark-600 hover:bg-dark-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                            className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50"
                         >
                             Cancel
                         </button>
                         <button
                             onClick={handleJoin}
                             disabled={joining || roomCode.length !== 6}
-                            className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
                         >
                             {joining ? 'Joining...' : 'Join Room'}
                         </button>

@@ -16,7 +16,7 @@ const StatCard = ({ icon: Icon, label, value, delay = 0 }) => (
   <motion.div
     variants={staggerItemVariants}
     whileHover={{ scale: 1.05, y: -4 }}
-    className="card group cursor-pointer"
+    className="glass p-6 rounded-2xl group cursor-pointer hover:glow transition"
   >
     <div className="flex items-center justify-between">
       <div>
@@ -109,7 +109,7 @@ const Dashboard = () => {
           <motion.h1
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-5xl font-heading mb-4 text-gradient text-balance"
+            className="text-5xl font-bold mb-4 text-gradient text-balance"
           >
             Your Dashboard
           </motion.h1>
@@ -144,16 +144,16 @@ const Dashboard = () => {
             initial="hidden"
             whileInView="show"
             viewport={{ once: true }}
-            className="glass-dark p-6 rounded-2xl"
+            className="glass p-6 rounded-2xl"
           >
-            <h3 className="text-2xl font-heading mb-6 text-gradient">Skill Distribution</h3>
+            <h3 className="text-2xl font-bold mb-6 text-gradient">Skill Distribution</h3>
             <ResponsiveContainer width="100%" height={300}>
               <RadarChart data={skillData}>
-                <PolarGrid strokeDasharray="3 3" stroke="#33335A" />
-                <PolarAngleAxis dataKey="skill" stroke="#A78BFA" />
-                <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#404070" />
-                <Radar name="Skills" dataKey="value" stroke="#7C3AED" fill="#7C3AED" fillOpacity={0.6} />
-                <Tooltip contentStyle={{ backgroundColor: "#0F0F23", border: "1px solid #33335A" }} />
+                <PolarGrid strokeDasharray="3 3" stroke="#333" />
+                <PolarAngleAxis dataKey="skill" stroke="#999" />
+                <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#666" />
+                <Radar name="Skills" dataKey="value" stroke="#00ffc3" fill="#00ffc3" fillOpacity={0.6} />
+                <Tooltip contentStyle={{ backgroundColor: "#1a1a1a", border: "1px solid #333" }} />
               </RadarChart>
             </ResponsiveContainer>
           </motion.div>
@@ -167,7 +167,7 @@ const Dashboard = () => {
             className="glass p-6 rounded-2xl space-y-6"
           >
             <div>
-              <h3 className="text-2xl font-heading mb-6 text-gradient">Performance</h3>
+              <h3 className="text-2xl font-bold mb-6 text-gradient">Performance</h3>
               <div className="grid grid-cols-3 gap-4">
                 <div className="bg-dark-700/50 p-4 rounded-xl text-center">
                   <motion.p initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="text-3xl font-bold text-success">
@@ -205,14 +205,14 @@ const Dashboard = () => {
         </div>
 
         {/* Recent Matches */}
-          <motion.div
-            variants={staggerItemVariants}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true }}
-            className="glass-dark p-6 rounded-2xl"
-          >
-            <h3 className="text-2xl font-heading mb-6 text-gradient">Recent Matches</h3>
+        <motion.div
+          variants={staggerItemVariants}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true }}
+          className="glass p-6 rounded-2xl"
+        >
+          <h3 className="text-2xl font-bold mb-6 text-gradient">Recent Matches</h3>
           <div className="space-y-3">
             {matchHistory.slice(0, 10).map((match, idx) => (
               <motion.div
@@ -250,8 +250,8 @@ const Dashboard = () => {
             viewport={{ once: true }}
             className="glass p-6 rounded-2xl mt-8"
           >
-            <h3 className="text-2xl font-heading mb-6 text-gradient flex items-center gap-2">
-              <Award size={28} className="text-primary" />
+            <h3 className="text-2xl font-bold mb-6 text-gradient flex items-center gap-2">
+              <Award size={28} />
               Achievements
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -264,7 +264,7 @@ const Dashboard = () => {
                   viewport={{ once: true }}
                   className="bg-gradient-to-br from-primary/20 to-secondary/10 border border-primary/40 p-4 rounded-xl text-center"
                 >
-                  <div className="mb-2"><Award className="w-8 h-8 text-secondary mx-auto" /></div>
+                  <div className="text-2xl mb-2">⭐</div>
                   <span className="text-xs font-semibold text-primary text-balance">{badge}</span>
                 </motion.div>
               ))}
