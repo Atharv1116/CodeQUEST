@@ -1,0 +1,10 @@
+de4e77a Revert "still same error"
+8bae2e1 host kick and disconnect elimination
+23b9d05 still same error
+7957842 Match result error
+eeedc00 Fix winner navigation
+5a5ce8a match finished error
+5c41d61 MAtch result page
+27b0743 Revert "ui changes"
+e4dfab8 ui changes
+e78ea00 ui changes
