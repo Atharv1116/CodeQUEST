@@ -1155,6 +1155,24 @@ io.on('connection', (socket) => {
     socket.emit('you-left-match');
   });
 
+  // Leave BR match — mark player as submitted so round can end early
+  socket.on('leave-br-match', ({ roomId }) => {
+    console.log(`[Server] leave-br-match from ${socket.id} in ${roomId}`);
+    // Handle custom BR (brEngine)
+    if (brEngine.hasBRState(roomId)) {
+      brEngine.handlePlayerLeave(roomId, socket.id);
+    }
+    // Handle quickplay BR (roomState)
+    const state = roomState.get(roomId);
+    if (state && state.type === 'battle-royale' && !state.finished) {
+      if (!state.eliminated) state.eliminated = [];
+      if (!state.eliminated.includes(socket.id)) {
+        state.eliminated.push(socket.id);
+      }
+      io.to(roomId).emit('player-disconnected', { socketId: socket.id });
+    }
+  });
+
   // Request hint
   socket.on('request-hint', async ({ roomId }) => {
     const question = roomQuestion.get(roomId);
@@ -1914,6 +1932,60 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Kick player from custom room (host only)
+  socket.on('kick-player', async ({ roomId, targetUserId }) => {
+    try {
+      const room = await CustomRoom.findOne({ roomId });
+      if (!room) return socket.emit('room-error', { error: 'Room not found' });
+
+      const kickerUserId = playerSessions.get(socket.id);
+      if (!kickerUserId || room.hostId.toString() !== kickerUserId.toString()) {
+        return socket.emit('room-error', { error: 'Only the host can kick players' });
+      }
+      if (kickerUserId.toString() === targetUserId.toString()) {
+        return socket.emit('room-error', { error: 'You cannot kick yourself' });
+      }
+
+      // Find the target player's socket ID before removal
+      let targetSocketId = null;
+      for (const team of room.teams) {
+        for (const slot of team.slots) {
+          if (slot.playerId && slot.playerId.toString() === targetUserId.toString()) {
+            targetSocketId = slot.socketId;
+            break;
+          }
+        }
+        if (targetSocketId) break;
+      }
+
+      const removed = room.removePlayer(targetUserId);
+      if (!removed) return socket.emit('room-error', { error: 'Player not in room' });
+
+      await room.save();
+      console.log(`[CustomRoom] Host kicked user ${targetUserId} from room ${room.roomCode}`);
+
+      // Notify the kicked player
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('player-kicked', {
+          message: 'You have been kicked from the room by the host.'
+        });
+        // Force their socket to leave the room
+        const kickedSocket = io.sockets.sockets.get(targetSocketId);
+        if (kickedSocket) kickedSocket.leave(roomId);
+      }
+
+      // Broadcast updated state to remaining players
+      io.to(roomId).emit('room-state-update', {
+        teams: room.teams,
+        totalPlayers: room.totalPlayers,
+        hostId: room.hostId
+      });
+    } catch (error) {
+      console.error('[CustomRoom] Error kicking player:', error);
+      socket.emit('room-error', { error: error.message });
+    }
+  });
+
   // Switch team slot
   socket.on('switch-team-slot', async ({ roomId, userId, targetTeamNumber, targetSlotNumber }) => {
     try {
@@ -2178,10 +2250,14 @@ io.on('connection', (socket) => {
 
         if (state.type === 'battle-royale') {
           // Eliminate disconnected player
+          if (!state.eliminated) state.eliminated = [];
           if (!state.eliminated.includes(socket.id)) {
             state.eliminated.push(socket.id);
           }
           io.to(roomId).emit('player-disconnected', { socketId: socket.id });
+        } else if (state.type === 'custom-battle-royale') {
+          // Custom BR: use brEngine to handle leave
+          brEngine.handlePlayerLeave(roomId, socket.id);
         } else if (state.type === '1v1' && remainingPlayers.length === 1) {
           // 1v1: Remaining player wins
           const winnerId = remainingPlayers[0];

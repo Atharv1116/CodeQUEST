@@ -923,6 +923,41 @@ async function adminStartNextRound(roomId) {
   await startNextBRRound(roomId);
 }
 
+// ── Handle Player Leave / Disconnect ────────────────────────────
+
+/**
+ * Mark a disconnected/leaving player as "submitted" so the round
+ * can end early instead of making everyone wait for the full timer.
+ */
+function handlePlayerLeave(roomId, socketId) {
+  const state = brStates.get(roomId);
+  if (!state || state.status !== 'active') return;
+
+  // Find the player's team
+  let playerTeam = null;
+  for (const team of state.teams) {
+    if (team.status !== 'active') continue;
+    const found = team.players.find(p => p.socketId === socketId);
+    if (found) {
+      playerTeam = team;
+      break;
+    }
+  }
+
+  if (!playerTeam) return; // Player not in an active team
+
+  // Mark as submitted so they count toward early termination
+  if (!state.roundSubmittedPlayers) {
+    state.roundSubmittedPlayers = new Set();
+  }
+  state.roundSubmittedPlayers.add(socketId);
+
+  console.log(`[BREngine] Player ${socketId} left/disconnected — marked as submitted for round ${state.currentRound}`);
+
+  // Check if all active players have now submitted
+  checkEarlyTermination(roomId, state);
+}
+
 // ── Exports ─────────────────────────────────────────────────────
 
 module.exports = {
@@ -938,6 +973,7 @@ module.exports = {
   hasBRState,
   getBRMatchType,
   checkEarlyTermination,
+  handlePlayerLeave,
   BR_ROUND_DURATION_SECONDS,
   BR_ROUND_DURATIONS,
   BR_INTERMISSION_SECONDS

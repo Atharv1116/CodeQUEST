@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Copy, Users, Crown, LogOut, Play, Check, Settings, Eye } from 'lucide-react';
+import { Copy, Users, Crown, LogOut, Play, Check, Settings, Eye, UserMinus } from 'lucide-react';
 
 const CustomRoomLobby = () => {
     const { roomId } = useParams();
@@ -109,6 +109,11 @@ const CustomRoomLobby = () => {
             alert(`Error: ${data.error}`);
         });
 
+        socket.on('player-kicked', (data) => {
+            alert(data.message || 'You have been kicked from the room.');
+            navigate('/battle-royale-mode');
+        });
+
         return () => {
             socket.off('room-state-update');
             socket.off('player-joined');
@@ -118,6 +123,7 @@ const CustomRoomLobby = () => {
             socket.off('match-starting');
             socket.off('navigate-to-match');
             socket.off('room-error');
+            socket.off('player-kicked');
         };
     }, [socket, user, roomId, navigate]);
 
@@ -209,6 +215,13 @@ const CustomRoomLobby = () => {
             roomId,
             userId: user.id
         });
+    };
+
+    const handleKickPlayer = (targetUserId) => {
+        if (!socket || !user || !isHost) return;
+        if (window.confirm('Are you sure you want to kick this player?')) {
+            socket.emit('kick-player', { roomId, targetUserId });
+        }
     };
 
     const handleUpdateSettings = (newSettings) => {
@@ -384,6 +397,8 @@ const CustomRoomLobby = () => {
                             mySlot={mySlot}
                             hostId={actualHostId}
                             roomStatus={room.roomStatus}
+                            isRoomHost={isHost}
+                            onKickPlayer={handleKickPlayer}
                         />
                     ))}
                 </div>
@@ -501,7 +516,7 @@ const SettingsModal = ({ room, onClose, onUpdate }) => {
     );
 };
 
-const TeamCard = ({ team, onSlotClick, mySlot, hostId, roomStatus }) => {
+const TeamCard = ({ team, onSlotClick, mySlot, hostId, roomStatus, isRoomHost, onKickPlayer }) => {
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -527,6 +542,8 @@ const TeamCard = ({ team, onSlotClick, mySlot, hostId, roomStatus }) => {
                         isMySlot={mySlot?.teamNumber === team.teamNumber && mySlot?.slotNumber === slot.slotNumber}
                         isHost={slot.playerId === hostId}
                         canClick={roomStatus === 'waiting' && !slot.playerId && !slot.isLocked}
+                        isRoomHost={isRoomHost}
+                        onKickPlayer={onKickPlayer}
                     />
                 ))}
             </div>
@@ -534,7 +551,7 @@ const TeamCard = ({ team, onSlotClick, mySlot, hostId, roomStatus }) => {
     );
 };
 
-const PlayerSlot = ({ slot, teamNumber, onClick, isMySlot, isHost, canClick }) => {
+const PlayerSlot = ({ slot, teamNumber, onClick, isMySlot, isHost, canClick, isRoomHost, onKickPlayer }) => {
     if (!slot.playerId) {
         // Empty slot
         return (
@@ -587,6 +604,17 @@ const PlayerSlot = ({ slot, teamNumber, onClick, isMySlot, isHost, canClick }) =
                         <div className="text-xs text-purple-400">You (Host)</div>
                     )}
                 </div>
+
+                {/* Kick Button — visible to host, not for self or the host player */}
+                {isRoomHost && !isMySlot && !isHost && onKickPlayer && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onKickPlayer(slot.playerId); }}
+                        className="p-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/40 text-red-400 hover:text-red-300 transition-all"
+                        title="Kick player"
+                    >
+                        <UserMinus className="w-4 h-4" />
+                    </button>
+                )}
             </div>
         </motion.div>
     );

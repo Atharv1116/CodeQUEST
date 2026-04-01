@@ -2,19 +2,37 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Trophy, TrendingUp, TrendingDown, Minus, Clock, Target, Zap, Coins, Lightbulb } from 'lucide-react';
+import { useSocket } from '../contexts/SocketContext';
 import axios from 'axios';
 
 const MatchResult = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { matchResult, winner: winnerState, questionTitle } = location.state || {};
+  const socket = useSocket();
+  const { matchResult: initialMatchResult, winner: winnerState, questionTitle } = location.state || {};
 
+  // Local state so we can patch in late-arriving data (e.g. rating-update)
+  const [matchResult, setMatchResult] = useState(initialMatchResult || null);
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
 
+  // Listen for late-arriving rating-update events
   useEffect(() => {
-    // Redirect back to lobby if no match result state is provided
+    if (!socket) return;
+    const handleRatingUpdate = ({ matchId, ratingChanges }) => {
+      console.log('[MatchResult] rating-update received:', matchId, ratingChanges);
+      setMatchResult(prev => prev ? {
+        ...prev,
+        matchId: matchId || prev.matchId,
+        ratingChanges: ratingChanges?.length > 0 ? ratingChanges : prev.ratingChanges
+      } : prev);
+    };
+    socket.on('rating-update', handleRatingUpdate);
+    return () => socket.off('rating-update', handleRatingUpdate);
+  }, [socket]);
+
+  useEffect(() => {
     if (!matchResult && !winnerState) {
       navigate('/lobby');
     }
@@ -27,12 +45,10 @@ const MatchResult = () => {
   const isLoss = winnerState === 'opponent' || winnerState === 'loss';
 
   // Extract my stats and ratings
-  // Use heuristic: find the rating change where I am the winner, etc., or based on delta
-  // But wait, ratingChanges has delta, before, after, username.
   const myRatingRow = isWin 
     ? matchResult?.ratingChanges?.find(r => (r.delta ?? 0) > 0) || matchResult?.ratingChanges?.[0]
     : isDraw 
-      ? matchResult?.ratingChanges?.[0] // Arbitrary if draw
+      ? matchResult?.ratingChanges?.[0]
       : matchResult?.ratingChanges?.find(r => (r.delta ?? 0) <= 0);
 
   const delta = myRatingRow ? (myRatingRow.delta ?? (myRatingRow.after - myRatingRow.before)) : null;
@@ -40,13 +56,11 @@ const MatchResult = () => {
   const xpGained = isWin ? matchResult?.xpChanges?.winner?.xp : matchResult?.xpChanges?.loser?.xp;
   const coinsGained = isWin ? matchResult?.xpChanges?.winner?.coins : matchResult?.xpChanges?.loser?.coins;
 
-  // Winner's solve time (shown for both winner and loser — it's the match solve time)
-  const solveMs = matchResult?.stats?.winner?.solveTimeMs;
+  // Show the VIEWER's own solve time and attempts (not always the winner's)
+  const myStats = isWin ? matchResult?.stats?.winner : matchResult?.stats?.loser;
+  const solveMs = myStats?.solveTimeMs ?? matchResult?.stats?.winner?.solveTimeMs;
   const solveSec = (solveMs != null && solveMs > 0) ? Math.round(solveMs / 1000) : null;
-  // Show the viewer's own attempts
-  const attempts = isWin
-    ? (matchResult?.stats?.winner?.attempts ?? '?')
-    : (matchResult?.stats?.loser?.attempts ?? '?');
+  const attempts = myStats?.attempts ?? '?';
 
   // Visual Theme mapping based on outcome
   const theme = isWin 
