@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Copy, Users, Crown, LogOut, Play, Check, Settings, Eye, UserMinus } from 'lucide-react';
+import { Copy, Users, Crown, LogOut, Play, Check, Settings, Eye } from 'lucide-react';
 
 const CustomRoomLobby = () => {
     const { roomId } = useParams();
@@ -211,14 +211,6 @@ const CustomRoomLobby = () => {
         });
     };
 
-    const handleKickPlayer = (targetUserId) => {
-        if (!socket || !user || !isHost) return;
-        // Confirm before kicking
-        if (window.confirm('Are you sure you want to kick this player from the room?')) {
-            socket.emit('kick-player', { roomId, targetUserId });
-        }
-    };
-
     const handleUpdateSettings = (newSettings) => {
         if (!socket || !user || !isHost) return;
 
@@ -377,8 +369,6 @@ const CustomRoomLobby = () => {
                                 isMySlot={mySlot?.teamNumber === 99 && mySlot?.slotNumber === slot.slotNumber}
                                 isHost={slot.playerId === actualHostId}
                                 canClick={room.roomStatus === 'waiting' && !slot.playerId && !slot.isLocked}
-                                isRoomHost={isHost}
-                                onKick={handleKickPlayer}
                             />
                         ))}
                     </div>
@@ -394,8 +384,6 @@ const CustomRoomLobby = () => {
                             mySlot={mySlot}
                             hostId={actualHostId}
                             roomStatus={room.roomStatus}
-                            isRoomHost={isHost}
-                            onKick={handleKickPlayer}
                         />
                     ))}
                 </div>
@@ -513,7 +501,7 @@ const SettingsModal = ({ room, onClose, onUpdate }) => {
     );
 };
 
-const TeamCard = ({ team, onSlotClick, mySlot, hostId, roomStatus, isRoomHost, onKick }) => {
+const TeamCard = ({ team, onSlotClick, mySlot, hostId, roomStatus }) => {
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -539,8 +527,6 @@ const TeamCard = ({ team, onSlotClick, mySlot, hostId, roomStatus, isRoomHost, o
                         isMySlot={mySlot?.teamNumber === team.teamNumber && mySlot?.slotNumber === slot.slotNumber}
                         isHost={slot.playerId === hostId}
                         canClick={roomStatus === 'waiting' && !slot.playerId && !slot.isLocked}
-                        isRoomHost={isRoomHost}
-                        onKick={onKick}
                     />
                 ))}
             </div>
@@ -548,7 +534,7 @@ const TeamCard = ({ team, onSlotClick, mySlot, hostId, roomStatus, isRoomHost, o
     );
 };
 
-const PlayerSlot = ({ slot, teamNumber, onClick, isMySlot, isHost, canClick, isRoomHost, onKick }) => {
+const PlayerSlot = ({ slot, teamNumber, onClick, isMySlot, isHost, canClick }) => {
     if (!slot.playerId) {
         // Empty slot
         return (
@@ -601,20 +587,6 @@ const PlayerSlot = ({ slot, teamNumber, onClick, isMySlot, isHost, canClick, isR
                         <div className="text-xs text-purple-400">You (Host)</div>
                     )}
                 </div>
-
-                {/* Kick Button for Host */}
-                {isRoomHost && !isMySlot && !isHost && (
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onKick(slot.playerId);
-                        }}
-                        className="ml-auto p-1.5 text-red-500 hover:text-red-300 hover:bg-red-500/20 rounded-md transition-colors"
-                        title="Kick Player"
-                    >
-                        <UserMinus className="w-4 h-4" />
-                    </button>
-                )}
             </div>
         </motion.div>
     );

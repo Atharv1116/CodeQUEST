@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import Editor from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Users, Clock, Send, Skull } from 'lucide-react';
+import { Trophy, Users, Clock, Send } from 'lucide-react';
 
 const BattleRoyale = () => {
   const { roomId } = useParams();
@@ -74,17 +74,6 @@ const BattleRoyale = () => {
       socket.off('evaluation-result');
     };
   }, [socket, roomId]);
-
-  // ── Emit leave-br-match on unmount (navigate away) ─────────
-  useEffect(() => {
-    if (!socket || !roomId) return;
-    return () => {
-      // Only emit if match isn't finished (don't spam on normal exit)
-      if (!gameFinished) {
-        socket.emit('leave-br-match', { roomId });
-      }
-    };
-  }, [socket, roomId, gameFinished]);
 
   useEffect(() => {
     if (timeLeft > 0 && !gameFinished) {
@@ -283,45 +272,6 @@ const BattleRoyale = () => {
         </div>
       </div>
     </div>
-
-
-      {/* Eliminated Overlay — Only for eliminated players */}
-      <AnimatePresence>
-        {eliminated.includes(socket?.id) && !gameFinished && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[55]"
-          >
-            <motion.div
-              initial={{ scale: 0.8, y: 30 }}
-              animate={{ scale: 1, y: 0 }}
-              className="bg-gradient-to-br from-red-900/80 to-gray-900 rounded-2xl p-10 max-w-md w-full border-2 border-red-500/50 text-center shadow-2xl mx-4"
-            >
-              <motion.div
-                animate={{ scale: [1, 1.1, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              >
-                <Skull className="w-20 h-20 text-red-400 mx-auto mb-4" />
-              </motion.div>
-              <h2 className="text-3xl font-bold text-red-400 mb-2">ELIMINATED</h2>
-              <p className="text-gray-300 mb-2">
-                You have been eliminated from the Battle Royale.
-              </p>
-              <p className="text-gray-500 text-sm mb-8">
-                Better luck next time! Keep practicing to improve your skills.
-              </p>
-              <button
-                onClick={() => navigate('/lobby')}
-                className="w-full px-8 py-4 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white rounded-xl font-bold text-lg transition-all hover:scale-105 shadow-lg shadow-red-500/30"
-              >
-                Return to Lobby
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
   );
 };
 

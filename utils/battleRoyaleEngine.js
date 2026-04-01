@@ -923,64 +923,12 @@ async function adminStartNextRound(roomId) {
   await startNextBRRound(roomId);
 }
 
-/**
- * Handle a player leaving or disconnecting during a BR match.
- * Marks them as "submitted" so early termination can trigger,
- * and broadcasts the leave to all remaining players.
- *
- * @param {string} roomId
- * @param {string} socketId
- * @param {string} userId
- * @returns {{ eliminated: boolean }} whether the player/team was affected
- */
-function handlePlayerLeave(roomId, socketId, userId) {
-  const state = brStates.get(roomId);
-  if (!state || state.status === 'finished') return { eliminated: false };
-
-  // Find which team this player belongs to
-  let playerTeam = null;
-  let playerEntry = null;
-  for (const team of state.teams) {
-    const p = team.players.find(pl => pl.socketId === socketId || pl.userId === userId);
-    if (p) {
-      playerTeam = team;
-      playerEntry = p;
-      break;
-    }
-  }
-  if (!playerTeam || !playerEntry) return { eliminated: false };
-
-  // If the match is active, mark this player as having "submitted" so
-  // the early termination check recognises they won't submit anything.
-  if (state.status === 'active') {
-    const attemptKey = playerEntry.userId || socketId;
-    if (!state.roundSubmittedPlayers) state.roundSubmittedPlayers = new Set();
-    state.roundSubmittedPlayers.add(attemptKey);
-
-    console.log(`[BREngine] Player left mid-round: ${attemptKey} (team ${playerTeam.teamNumber})`);
-
-    // Broadcast to remaining players
-    _io.to(roomId).emit('br-player-left', {
-      roomId,
-      userId: playerEntry.userId,
-      username: playerEntry.username || 'Player',
-      teamNumber: playerTeam.teamNumber
-    });
-
-    // Check if this triggers early round termination
-    checkEarlyTermination(roomId, state);
-  }
-
-  return { eliminated: true };
-}
-
 // ── Exports ─────────────────────────────────────────────────────
 
 module.exports = {
   init,
   initBattleRoyale,
   handleBRSubmission,
-  handlePlayerLeave,
   computeTeamLeaderboard,
   endBRRound,
   startNextBRRound,

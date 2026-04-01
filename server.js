@@ -364,12 +364,8 @@ async function handleTimerExpiry(roomId) {
     await endBattleRoyaleRound(roomId, state.round || 1, true);
   }
 
-  // Don't clean up battle-royale rooms — they have multiple rounds
-  // and endBattleRoyaleRound / finishBattleRoyale manage their own lifecycle
-  if (state.type !== 'battle-royale') {
-    roomState.delete(roomId);
-    roomQuestion.delete(roomId);
-  }
+  roomState.delete(roomId);
+  roomQuestion.delete(roomId);
 }
 
 // Helper: Get random question
@@ -1918,112 +1914,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ── Kick player from custom room (host only) ──────────────────
-  socket.on('kick-player', async ({ roomId, targetUserId }) => {
-    try {
-      const room = await CustomRoom.findOne({ roomId });
-      if (!room) return socket.emit('room-error', { error: 'Room not found' });
-
-      // Only the host can kick
-      const kickerUserId = playerSessions.get(socket.id);
-      if (String(room.hostId) !== String(kickerUserId)) {
-        return socket.emit('room-error', { error: 'Only the host can kick players' });
-      }
-
-      // Can't kick yourself
-      if (String(targetUserId) === String(kickerUserId)) {
-        return socket.emit('room-error', { error: "You can't kick yourself" });
-      }
-
-      // Find the target player's socket ID from the room teams
-      let targetSocketId = null;
-      let targetUsername = null;
-      for (const team of room.teams) {
-        for (const slot of team.slots) {
-          if (slot.playerId && String(slot.playerId) === String(targetUserId)) {
-            targetSocketId = slot.socketId;
-            targetUsername = slot.username;
-            break;
-          }
-        }
-        if (targetSocketId) break;
-      }
-
-      const removed = room.removePlayer(targetUserId);
-      if (!removed) return socket.emit('room-error', { error: 'Player not found in room' });
-
-      await room.save();
-
-      console.log(`[CustomRoom] Host kicked ${targetUsername || targetUserId} from room ${room.roomCode}`);
-
-      // Notify the kicked player
-      if (targetSocketId) {
-        io.to(targetSocketId).emit('kicked-from-room', {
-          roomId,
-          message: 'You have been kicked from the room by the host.'
-        });
-        // Force them to leave the socket room
-        const targetSocket = io.sockets.sockets.get(targetSocketId);
-        if (targetSocket) targetSocket.leave(roomId);
-      }
-
-      // Broadcast updated room state
-      io.to(roomId).emit('room-state-update', {
-        teams: room.teams,
-        totalPlayers: room.totalPlayers,
-        hostId: room.hostId
-      });
-
-      io.to(roomId).emit('player-kicked', {
-        playerId: targetUserId,
-        username: targetUsername || 'Player'
-      });
-
-    } catch (error) {
-      console.error('[CustomRoom] Error kicking player:', error);
-      socket.emit('room-error', { error: error.message });
-    }
-  });
-
-  // ── Player voluntarily leaves BR match (navigate away) ────────
-  socket.on('leave-br-match', ({ roomId }) => {
-    const userId = playerSessions.get(socket.id);
-    console.log(`[BR] Player leaving match: ${userId || socket.id} from ${roomId}`);
-
-    // Custom BR — handled by engine
-    if (brEngine.hasBRState(roomId)) {
-      brEngine.handlePlayerLeave(roomId, socket.id, userId);
-    }
-
-    // Quickplay BR — handled by roomState
-    const state = roomState.get(roomId);
-    if (state && state.type === 'battle-royale' && !state.finished) {
-      if (state.scores?.has(socket.id)) {
-        // Mark as submitted so early termination can fire
-        if (!state.roundSubmittedPlayers) state.roundSubmittedPlayers = new Set();
-        state.roundSubmittedPlayers.add(socket.id);
-
-        // Also add to eliminated list
-        if (!state.eliminated) state.eliminated = [];
-        if (!state.eliminated.includes(socket.id)) {
-          state.eliminated.push(socket.id);
-        }
-        roomState.set(roomId, state);
-
-        io.to(roomId).emit('player-disconnected', { socketId: socket.id, userId });
-
-        // Check if all remaining active players have submitted
-        const activePlayers = Array.from(state.scores.keys())
-          .filter(id => !state.eliminated.includes(id));
-        const allSubmitted = activePlayers.every(id => state.roundSubmittedPlayers?.has(id));
-        if (allSubmitted && activePlayers.length > 0) {
-          console.log(`[BR] All active players submitted after leave — ending round early`);
-          endBattleRoyaleRound(roomId, state.round || 1, false);
-        }
-      }
-    }
-  });
-
   // Switch team slot
   socket.on('switch-team-slot', async ({ roomId, userId, targetTeamNumber, targetSlotNumber }) => {
     try {
@@ -2288,28 +2178,10 @@ io.on('connection', (socket) => {
 
         if (state.type === 'battle-royale') {
           // Eliminate disconnected player
-          if (!state.eliminated) state.eliminated = [];
           if (!state.eliminated.includes(socket.id)) {
             state.eliminated.push(socket.id);
           }
-          // Mark as submitted so early termination can fire
-          if (!state.roundSubmittedPlayers) state.roundSubmittedPlayers = new Set();
-          state.roundSubmittedPlayers.add(socket.id);
-          roomState.set(roomId, state);
-
-          io.to(roomId).emit('player-disconnected', { socketId: socket.id, userId });
-
-          // Check if all remaining active players have submitted
-          const activePlayers = Array.from(state.scores?.keys() || [])
-            .filter(id => !state.eliminated.includes(id));
-          const allSubmitted = activePlayers.every(id => state.roundSubmittedPlayers?.has(id));
-          if (allSubmitted && activePlayers.length > 0) {
-            console.log(`[BR] All active players submitted after disconnect — ending round early`);
-            endBattleRoyaleRound(roomId, state.round || 1, false);
-          }
-        } else if (state.type === 'custom-battle-royale') {
-          // Custom BR — handled by engine
-          brEngine.handlePlayerLeave(roomId, socket.id, userId);
+          io.to(roomId).emit('player-disconnected', { socketId: socket.id });
         } else if (state.type === '1v1' && remainingPlayers.length === 1) {
           // 1v1: Remaining player wins
           const winnerId = remainingPlayers[0];
