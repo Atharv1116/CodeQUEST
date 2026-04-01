@@ -4,7 +4,7 @@ import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import Editor from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Users, Clock, Send, Play, Shield, Skull, Crown, ChevronRight, Award, Zap, Lightbulb } from 'lucide-react';
+import { Trophy, Users, Clock, Send, Play, Shield, Skull, Crown, ChevronRight, Award, Zap, Lightbulb, LogOut } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -59,6 +59,24 @@ const BattleRoyaleMatch = () => {
     return null;
   }, [user, teams]);
 
+  // Leave Match states
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const handleLeaveMatch = () => {
+    if (matchStatus === 'finished') {
+      navigate('/battle-royale-mode');
+    } else {
+      setShowLeaveConfirm(true);
+    }
+  };
+  const confirmLeave = () => {
+    setShowLeaveConfirm(false);
+    if (socket && roomId) {
+      socket.emit('leave-br-match', { roomId });
+    }
+    navigate('/battle-royale-mode');
+  };
+  const cancelLeave = () => setShowLeaveConfirm(false);
+
   // ── State recovery on mount ───────────────────────────
   useEffect(() => {
     if (!socket || !user || !roomId || hasRecovered.current) return;
@@ -94,14 +112,7 @@ const BattleRoyaleMatch = () => {
     recoverState();
   }, [socket, user, roomId]);
 
-  // ── Emit leave on unmount (auto-eliminate) ─────────────
-  useEffect(() => {
-    return () => {
-      if (socket && roomId) {
-        socket.emit('leave-br-match', { roomId });
-      }
-    };
-  }, [socket, roomId]);
+
 
   // ── Socket event handlers ─────────────────────────────
   useEffect(() => {
@@ -411,8 +422,46 @@ const BattleRoyaleMatch = () => {
   // ── MAIN MATCH UI ─────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900">
+      {/* Leave Confirmation Modal */}
+      {showLeaveConfirm && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) cancelLeave();
+          }}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            onClick={(e) => e.stopPropagation()}
+            className="glass p-8 rounded-lg max-w-md w-full mx-4"
+          >
+            <h3 className="text-2xl font-bold mb-4 text-gradient">Leave Match?</h3>
+            <p className="text-gray-300 mb-6">
+              Are you sure you want to leave this match? You will be auto-eliminated without eliminating your teammates.
+            </p>
+            <div className="flex space-x-4">
+              <button
+                onClick={confirmLeave}
+                className="flex-1 bg-red-500 text-white py-2 rounded-lg font-semibold hover:bg-red-600 transition cursor-pointer"
+                type="button"
+              >
+                Yes, Leave
+              </button>
+              <button
+                onClick={cancelLeave}
+                className="flex-1 bg-primary text-dark-900 py-2 rounded-lg font-semibold hover:bg-cyan-400 transition cursor-pointer"
+                type="button"
+              >
+                No, Stay
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {/* Top Bar */}
-      <div className="bg-gray-900/80 backdrop-blur-sm border-b border-gray-700 px-4 py-3">
+      <div className="bg-gray-900/80 backdrop-blur-sm border-b border-gray-700 px-4 py-3 flex-shrink-0">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           {/* Round Info */}
           <div className="flex items-center gap-4">
@@ -441,13 +490,23 @@ const BattleRoyaleMatch = () => {
           </div>
 
           {/* My Team Badge */}
-          {myTeam && (
-            <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border ${mySolved ? 'bg-green-900/40 border-green-500/50' : 'bg-purple-900/40 border-purple-500/50'}`}>
-              <Shield className={`w-5 h-5 ${mySolved ? 'text-green-400' : 'text-purple-400'}`} />
-              <span className="text-white font-bold text-lg tracking-wide">Team {myTeam} <span className="text-sm font-normal text-gray-300 ml-1">(You)</span></span>
-              {mySolved && <span className="text-green-400 font-semibold ml-2">✅ Solved</span>}
-            </div>
-          )}
+          <div className="flex items-center gap-4">
+            {myTeam && (
+              <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border ${mySolved ? 'bg-green-900/40 border-green-500/50' : 'bg-purple-900/40 border-purple-500/50'}`}>
+                <Shield className={`w-5 h-5 ${mySolved ? 'text-green-400' : 'text-purple-400'}`} />
+                <span className="text-white font-bold text-lg tracking-wide">Team {myTeam} <span className="text-sm font-normal text-gray-300 ml-1">(You)</span></span>
+                {mySolved && <span className="text-green-400 font-semibold ml-2">✅ Solved</span>}
+              </div>
+            )}
+            {/* Leave Match Button */}
+            <button
+              onClick={() => handleLeaveMatch()}
+              className="flex items-center gap-2 text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-4 py-2 rounded-lg transition font-semibold text-sm cursor-pointer"
+            >
+              <LogOut size={16} />
+              <span>Leave Match</span>
+            </button>
+          </div>
         </div>
       </div>
 

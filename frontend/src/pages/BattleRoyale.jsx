@@ -75,14 +75,6 @@ const BattleRoyale = () => {
     };
   }, [socket, roomId]);
 
-  // Emit leave on unmount (auto-eliminate)
-  useEffect(() => {
-    return () => {
-      if (socket && roomId) {
-        socket.emit('leave-br-match', { roomId });
-      }
-    };
-  }, [socket, roomId]);
 
   useEffect(() => {
     if (timeLeft > 0 && !gameFinished) {

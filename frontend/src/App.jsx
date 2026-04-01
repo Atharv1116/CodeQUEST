@@ -23,13 +23,13 @@ import { ArrowLeft } from 'lucide-react';
 import './App.css';
 
 // Pages that show the full Navbar
-const NAVBAR_PATHS = ['/lobby', '/leaderboard', '/ai-tutor', '/dashboard'];
+const NAVBAR_PATHS = ['/', '/login', '/register', '/lobby', '/leaderboard', '/ai-tutor', '/dashboard', '/battle-royale-mode'];
 
 // Pages that should NOT show the back button
-const NO_BACK_BUTTON_PATHS = ['/', '/login', '/register', '/lobby', '/leaderboard', '/ai-tutor', '/dashboard'];
+const NO_BACK_BUTTON_PATHS = ['/', '/login', '/register', '/lobby', '/leaderboard', '/ai-tutor', '/dashboard', '/battle-royale-mode'];
 
 // Path prefixes that should NOT show the back button (have their own navigation)
-const NO_BACK_BUTTON_PREFIXES = ['/custom-room/'];
+const NO_BACK_BUTTON_PREFIXES = ['/custom-room/', '/battle/', '/battle-royale-match/'];
 
 const BackButton = () => {
   const navigate = useNavigate();

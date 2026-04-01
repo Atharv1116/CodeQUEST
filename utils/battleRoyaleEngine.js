@@ -946,15 +946,23 @@ function handlePlayerLeave(roomId, socketId) {
 
   if (!playerTeam) return; // Player not in an active team
 
-  // Mark as submitted so they count toward early termination
-  if (!state.roundSubmittedPlayers) {
-    state.roundSubmittedPlayers = new Set();
+  // Remove the player from the team completely
+  playerTeam.players = playerTeam.players.filter(p => p.socketId !== socketId);
+  console.log(`[BREngine] Player ${socketId} left/disconnected — removed from Team ${playerTeam.teamNumber}`);
+
+  // If the team is now empty, eliminate the whole team
+  if (playerTeam.players.length === 0) {
+    playerTeam.status = 'eliminated';
+    playerTeam.eliminatedInRound = state.currentRound;
+    console.log(`[BREngine] Team ${playerTeam.teamNumber} has no players left — eliminated in round ${state.currentRound}`);
+  } else {
+    // Notify room that player left
+    if (_io) {
+      _io.to(roomId).emit('br-match-state', getBRState(roomId));
+    }
   }
-  state.roundSubmittedPlayers.add(socketId);
 
-  console.log(`[BREngine] Player ${socketId} left/disconnected — marked as submitted for round ${state.currentRound}`);
-
-  // Check if all active players have now submitted
+  // Check if all remaining active players have now submitted
   checkEarlyTermination(roomId, state);
 }
 

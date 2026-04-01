@@ -4,7 +4,7 @@ import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import Editor from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Trophy, Lightbulb, Clock, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Send, Trophy, Lightbulb, Clock, TrendingUp, TrendingDown, Minus, LogOut } from 'lucide-react';
 import axios from 'axios';
 
 const LANGUAGE_CONFIG = {
@@ -825,9 +825,25 @@ const Battle = () => {
         </div>
       )}
 
+      {/* Top Bar explicitly for leaving since Navbar is hidden */}
+      <div className="flex items-center justify-between px-6 py-3 bg-dark-800 border-b border-dark-700 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="text-primary font-black tracking-widest text-lg">CODE</span>
+          <span className="text-white font-black tracking-widest text-lg">QUEST</span>
+          <span className="ml-2 px-2 py-1 bg-dark-700 text-gray-400 font-bold text-xs rounded-md">
+            {matchType?.toUpperCase() || 'MATCH'}
+          </span>
+        </div>
+        <button
+          onClick={() => handleLeaveMatch()}
+          className="flex items-center gap-2 text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-4 py-2 rounded-lg transition font-semibold text-sm cursor-pointer"
+        >
+          <LogOut size={16} />
+          <span>Leave Match</span>
+        </button>
+      </div>
 
-
-      <div className="flex-1 flex overflow-hidden border-t border-dark-700">
+      <div className="flex-1 flex overflow-hidden">
         {/* Left Panel - Question Section (LeetCode style) */}
         <div className="w-1/2 border-r border-dark-700 flex flex-col overflow-hidden bg-dark-800">
           {/* Question Header */}

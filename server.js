@@ -1244,8 +1244,13 @@ io.on('connection', (socket) => {
 
       // Record precise server-side timestamp
       const submitTimestamp = Date.now();
-      const submitTimeMs = submitTimestamp - (state.startedAt?.getTime?.() || submitTimestamp);
-
+      let submitTimeMs = 0;
+      if (state.timerEndAt && state.timerDuration) {
+        submitTimeMs = Math.max(0, (state.timerDuration * 1000) - (state.timerEndAt - submitTimestamp));
+      } else {
+        const startedTime = state.startedAt?.getTime?.() || new Date(state.startedAt).getTime() || submitTimestamp;
+        submitTimeMs = Math.max(0, submitTimestamp - startedTime);
+      }
       // Initialize per-player attempt tracking
       if (!state.playerAttempts) state.playerAttempts = {};
       if (!state.playerAttempts[socket.id]) state.playerAttempts[socket.id] = 0;
