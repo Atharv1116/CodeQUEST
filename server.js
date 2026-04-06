@@ -214,7 +214,8 @@ app.get('/api/match/:roomId/state', authenticateToken, async (req, res) => {
       players: state.players,
       playerIds: state.playerIds,
       myAttempts,
-      editorLocked: !!state.finished
+      editorLocked: !!state.finished,
+      matchResult: state.matchResultPayload
     });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
@@ -1439,6 +1440,10 @@ io.on('connection', (socket) => {
       },
       message: customMessage || '✅ Correct submission! Match over.'
     };
+    
+    // Save to state for fast in-memory polling fallback
+    if (state) state.matchResultPayload = payload;
+
     console.log(`[Server] emitMatchFinished1v1 → room ${roomId}, winnerUserId=${winnerUserId}, loserUserId=${loserUserId}`);
     io.to(roomId).emit('match-finished', payload);
     // REDUNDANT direct emits — guarantees delivery even if room membership has issues
