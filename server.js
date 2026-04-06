@@ -185,7 +185,17 @@ app.get('/api/match/:roomId/state', authenticateToken, async (req, res) => {
       return res.json({
         ok: true, status: 'finished',
         type: match.type, question: match.question,
-        timerRemaining: 0, editorLocked: true
+        timerRemaining: 0, editorLocked: true,
+        // Provide enough matchResult data so client doesn't freeze on UI
+        matchResult: {
+          roomId: match.roomId,
+          matchId: match._id,
+          type: match.type,
+          winnerUserId: match.winner,  // User ID, works better than sockets
+          winnerTeam: match.winnerTeam,
+          winningTeamIds: match.winners,
+          ratingChanges: match.ratingChanges || []
+        }
       });
     }
 
@@ -528,6 +538,19 @@ io.on('connection', (socket) => {
 
     // If there is active match state, send it so the client can recover
     const state = roomState.get(roomId);
+    if (state) {
+      // 1. UPDATE STALE SOCKET IDs in state.players
+      // so if a user reconnects, functionality like 'leave-match' referencing socket.id still works
+      const userId = playerSessions.get(socket.id);
+      if (userId && state.playerIds) {
+        const pIndex = state.playerIds.findIndex(id => id && id.toString() === userId.toString());
+        if (pIndex !== -1 && state.players[pIndex] !== socket.id) {
+          console.log(`[Server] Updating stale socket ID for user ${userId} to ${socket.id}`);
+          state.players[pIndex] = socket.id;
+        }
+      }
+    }
+
     const question = roomQuestion.get(roomId);
     if (state && question) {
       const timerEndAt = state.timerEndAt || null;

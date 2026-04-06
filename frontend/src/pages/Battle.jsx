@@ -654,9 +654,9 @@ const Battle = () => {
   // --- CLIENT-SIDE TIMER REMOVED --- timer now driven by server timer-tick events ---
   // Fallback reconnection: if match-found wasn't received, poll state from server
   useEffect(() => {
-    if (!roomId || question) return;
-    const timeout = setTimeout(async () => {
-      if (!question) {
+    if (!roomId) return;
+    const interval = setInterval(async () => {
+      if (!matchFinished) {  // Poll continuously until match finishes
         try {
           const token = localStorage.getItem('token');
           const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -664,18 +664,41 @@ const Battle = () => {
             headers: { Authorization: `Bearer ${token}` }
           });
           if (resp.data.ok) {
-            if (resp.data.question) setQuestion(resp.data.question);
+            if (resp.data.question && !question) setQuestion(resp.data.question);
             if (resp.data.timerRemaining !== undefined) setTimeLeft(resp.data.timerRemaining);
             if (resp.data.editorLocked) setEditorLocked(true);
-            if (resp.data.status === 'finished') setMatchFinished(true);
+            if (resp.data.status === 'finished') {
+              if (resp.data.matchResult) {
+                 // We MUST call handleMatchFinished natively, but since we can't easily reference the closure
+                 // We will update the exact same states!
+                 setMatchFinished(true);
+                 setMatchResult(resp.data.matchResult);
+                 
+                 let didIWin = false;
+                 const currentUser = userRef.current;
+                 const myUserId = currentUser?.id?.toString() || currentUser?._id?.toString();
+                 if (resp.data.matchResult.winnerUserId && myUserId) {
+                   didIWin = resp.data.matchResult.winnerUserId.toString() === myUserId;
+                 } else if (resp.data.matchResult.winnerTeam) {
+                   if (resp.data.matchResult.winningTeamIds && myUserId) {
+                     didIWin = resp.data.matchResult.winningTeamIds.map(id => id.toString()).includes(myUserId);
+                   } else {
+                     didIWin = resp.data.matchResult.winnerTeam === myTeamRef.current;
+                   }
+                 }
+                 setWinner(didIWin ? 'you' : 'opponent');
+              } else {
+                 setMatchFinished(true);
+              }
+            }
           }
         } catch (e) {
           console.error('[Battle] State recovery failed:', e);
         }
       }
-    }, 3000);
-    return () => clearTimeout(timeout);
-  }, [roomId, question]);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [roomId, question, matchFinished]);
 
   // ---------- RENDER: Post-Match Screens ----------
   // Helper to render rating delta
