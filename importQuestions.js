@@ -9,6 +9,11 @@ const questionSchema = new mongoose.Schema({
   outputFormat: String,
   sampleInput: String,
   sampleOutput: String,
+  testCases: [{
+    input: String,
+    output: String,
+    isHidden: Boolean
+  }],
   difficulty: String,
   language: String,
   solution: String

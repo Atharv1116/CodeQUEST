@@ -1185,19 +1185,36 @@ io.on('connection', (socket) => {
       socket.emit('evaluation-started', { message: 'Evaluating on hidden tests...' });
 
       let judgeRes;
+      let finalExpected = '';
       try {
-        // Use hidden test cases if available, otherwise fall back to sample I/O
-        const hiddenTests = question.testCases?.filter(tc => tc.isHidden);
-        const useHidden = hiddenTests && hiddenTests.length > 0;
-        const stdin = useHidden ? hiddenTests[0].input : (question.sampleInput || '');
-        const expected = useHidden ? hiddenTests[0].output : (question.sampleOutput || '');
+        const testCasesToRun = [];
+        if (question.sampleInput && question.sampleOutput) {
+           testCasesToRun.push({ input: question.sampleInput, output: question.sampleOutput, isHidden: false });
+        }
+        if (question.testCases && question.testCases.length > 0) {
+           testCasesToRun.push(...question.testCases);
+        }
+        // Fallback if missing
+        if (testCasesToRun.length === 0) {
+           testCasesToRun.push({ input: '1 2', output: '3', isHidden: false });
+        }
 
-        judgeRes = await submitToJudge0({
-          source_code: code,
-          language_id,
-          stdin,
-          expected_output: expected
-        });
+        let lastRes = null;
+
+        for (const tc of testCasesToRun) {
+            finalExpected = tc.output || '';
+            lastRes = await submitToJudge0({
+              source_code: code,
+              language_id,
+              stdin: tc.input || '',
+              expected_output: finalExpected
+            });
+
+            if (!lastRes || !lastRes.correct) {
+               break; // Fast-fail on first wrong testcase
+            }
+        }
+        judgeRes = lastRes;
       } finally {
         // Always unlock, even if Judge0 throws
         submissionLocks.delete(socket.id);
@@ -1210,7 +1227,7 @@ io.on('connection', (socket) => {
       }
 
       const stdout = (judgeRes.stdout || '').trim();
-      const expectedOut = (question.sampleOutput || '').trim();  // renamed: no conflict with inner `expected`
+      const expectedOut = finalExpected.trim();  
       const correct = judgeRes.correct === true || stdout === expectedOut;
 
       const details = {
