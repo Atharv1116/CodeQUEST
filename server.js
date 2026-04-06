@@ -1132,17 +1132,49 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // --- RUN (not Submit): use sample I/O, no locks, no state change ---
+      // --- RUN (not Submit): use sample I/O + hidden to rigorously test but no state change ---
       if (!isSubmit) {
-        socket.emit('evaluation-started', { message: 'Running on sample tests...' });
-        const judgeRes = await submitToJudge0({
-          source_code: code,
-          language_id,
-          stdin: inputOverride !== undefined ? String(inputOverride) : (question.sampleInput || ''),
-          expected_output: question.sampleOutput || ''
-        });
+        socket.emit('evaluation-started', { message: 'Running on all tests...' });
+
+        const testCasesToRun = [];
+        if (question.sampleInput && question.sampleOutput) {
+           testCasesToRun.push({ input: question.sampleInput, output: question.sampleOutput, isHidden: false });
+        }
+        if (question.testCases && question.testCases.length > 0) {
+           testCasesToRun.push(...question.testCases);
+        }
+        if (testCasesToRun.length === 0) {
+           testCasesToRun.push({ input: '1 2', output: '3', isHidden: false });
+        }
+
+        let judgeRes = null;
+        let finalExpected = '';
+        let allPassed = true;
+
+        for (const tc of testCasesToRun) {
+            finalExpected = tc.output || '';
+            const tempRes = await submitToJudge0({
+              source_code: code,
+              language_id,
+              stdin: inputOverride !== undefined ? String(inputOverride) : (tc.input || ''),
+              expected_output: finalExpected
+            });
+
+            if (!tempRes || !tempRes.correct) {
+               allPassed = false;
+               judgeRes = tempRes;
+               break;
+            }
+            judgeRes = tempRes;
+        }
+
+        if (!judgeRes) {
+          socket.emit('evaluation-result', { ok: false, message: 'Execution failed.' });
+          return;
+        }
+
         const stdout = (judgeRes.stdout || '').trim();
-        const correct = stdout === (question.sampleOutput || '').trim();
+        const correct = judgeRes.correct === true;
         const details = {
           status: judgeRes.status?.description,
           stdout, stderr: judgeRes.stderr,
