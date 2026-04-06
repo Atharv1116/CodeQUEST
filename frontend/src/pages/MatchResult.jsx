@@ -3,12 +3,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Trophy, TrendingUp, TrendingDown, Minus, Clock, Target, Zap, Coins, Lightbulb } from 'lucide-react';
 import { useSocket } from '../contexts/SocketContext';
+import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 
 const MatchResult = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const socket = useSocket();
+  const { user } = useAuth();  // Must be called before any early returns (Rules of Hooks)
   const { matchResult: initialMatchResult, winner: winnerState, questionTitle } = location.state || {};
 
   // Local state so we can patch in late-arriving data (e.g. rating-update)
@@ -44,23 +46,45 @@ const MatchResult = () => {
   const isDraw = winnerState === 'draw';
   const isLoss = winnerState === 'opponent' || winnerState === 'loss';
 
-  // Extract my stats and ratings
-  const myRatingRow = isWin 
-    ? matchResult?.ratingChanges?.find(r => (r.delta ?? 0) > 0) || matchResult?.ratingChanges?.[0]
-    : isDraw 
-      ? matchResult?.ratingChanges?.[0]
-      : matchResult?.ratingChanges?.find(r => (r.delta ?? 0) <= 0);
+  // Use authenticated user id to pick OWN stats row (most reliable)
+  const myUserId = user?.id?.toString() || user?._id?.toString();
+
+  // ── Rating row ──────────────────────────────────────────────────
+  const myRatingRow = (() => {
+    if (!matchResult?.ratingChanges?.length) return null;
+    // Try by userId first (most reliable)
+    if (myUserId) {
+      const row = matchResult.ratingChanges.find(r => r.userId?.toString() === myUserId);
+      if (row) return row;
+    }
+    // Fallback: by outcome
+    if (isWin) return matchResult.ratingChanges.find(r => (r.delta ?? 0) > 0) || matchResult.ratingChanges[0];
+    if (isDraw) return matchResult.ratingChanges[0];
+    return matchResult.ratingChanges.find(r => (r.delta ?? 0) <= 0) || matchResult.ratingChanges[matchResult.ratingChanges.length - 1];
+  })();
 
   const delta = myRatingRow ? (myRatingRow.delta ?? (myRatingRow.after - myRatingRow.before)) : null;
 
+  // ── XP / Coins ────────────────────────────────────────────────
   const xpGained = isWin ? matchResult?.xpChanges?.winner?.xp : matchResult?.xpChanges?.loser?.xp;
   const coinsGained = isWin ? matchResult?.xpChanges?.winner?.coins : matchResult?.xpChanges?.loser?.coins;
 
-  // Show the VIEWER's own solve time and attempts (not always the winner's)
-  const myStats = isWin ? matchResult?.stats?.winner : matchResult?.stats?.loser;
-  const solveMs = myStats?.solveTimeMs ?? matchResult?.stats?.winner?.solveTimeMs;
+  // ── My Stats (solve time & attempts) ─────────────────────────
+  // Priority: perPlayerStats[myUserId] → stats.winner/loser slot → null
+  const myStats = (() => {
+    // 1. Per-player keyed stats (server sends since this fix)
+    if (myUserId && matchResult?.perPlayerStats?.[myUserId]) {
+      return matchResult.perPlayerStats[myUserId];
+    }
+    // 2. Slot-based fallback — winner sees winner slot, loser sees loser slot
+    if (isWin)   return matchResult?.stats?.winner ?? null;
+    if (isLoss)  return matchResult?.stats?.loser  ?? null;
+    return matchResult?.stats?.winner ?? null; // draw
+  })();
+
+  const solveMs  = myStats?.solveTimeMs ?? null;   // null if not solved (loser)
   const solveSec = (solveMs != null && solveMs > 0) ? Math.round(solveMs / 1000) : null;
-  const attempts = myStats?.attempts ?? '?';
+  const attempts = myStats?.attempts ?? (isWin ? 1 : '—');
 
   // Visual Theme mapping based on outcome
   const theme = isWin 

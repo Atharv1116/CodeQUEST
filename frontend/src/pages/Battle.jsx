@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useBlocker } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import Editor from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Trophy, Lightbulb, Clock, TrendingUp, TrendingDown, Minus, LogOut } from 'lucide-react';
+import { Send, Trophy, Lightbulb, Clock, TrendingUp, TrendingDown, Minus, LogOut, Maximize, Minimize, AlertTriangle } from 'lucide-react';
 import axios from 'axios';
 
 const LANGUAGE_CONFIG = {
@@ -65,6 +65,20 @@ const formatTime = (totalSeconds) => {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
 
+// Client-side XP/coins helpers (mirror server formulas) used for leave/forfeit flows
+const XP_TABLE   = { easy: 10, medium: 25, hard: 50 };
+const COIN_TABLE = { easy: 10, medium: 25, hard: 50 };
+const MODE_MUL   = { '1v1': 1, '2v2': 1.2, 'battle-royale': 1.5 };
+const calculateXPClient = (outcome, diff, mode) => {
+  const base = XP_TABLE[diff] || 10;
+  const mul  = MODE_MUL[mode] || 1;
+  return Math.round(base * mul * (outcome === 'win' ? 2 : 1));
+};
+const calculateCoinsClient = (outcome, diff) => {
+  const base = COIN_TABLE[diff] || 10;
+  return Math.round(base * (outcome === 'win' ? 2 : 1));
+};
+
 const Battle = () => {
   const { roomId } = useParams();
   const navigate = useNavigate();
@@ -98,6 +112,12 @@ const Battle = () => {
   const [timeLeft, setTimeLeft] = useState(DEFAULT_TIMER);
   const [pendingNavigation, setPendingNavigation] = useState(null);
   const [correctlySubmitted, setCorrectlySubmitted] = useState(false); // true when winner gets correct eval
+  // Fullscreen + tab-switch state
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(true);
+  const [tabSwitchWarning, setTabSwitchWarning] = useState(false);
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [fullscreenExitWarning, setFullscreenExitWarning] = useState(false);
   // 2v2 team state
   const [matchType, setMatchType] = useState('1v1');
   const [myTeam, setMyTeam] = useState(null); // 'blue' or 'red'
@@ -212,14 +232,26 @@ const Battle = () => {
 
     const handleOpponentLeft = () => {
       console.log('[Battle] opponent-left-match — auto-win');
+      const diff = question?.difficulty || 'easy';
+      const mode = matchType || '1v1';
       setMatchFinished(true);
-      setMatchResult({ message: 'Opponent disconnected.' });
+      setMatchResult({
+        message: 'Opponent disconnected. You win!',
+        xpChanges: { winner: { xp: calculateXPClient('win', diff, mode), coins: calculateCoinsClient('win', diff, mode) }, loser: { xp: calculateXPClient('loss', diff, mode), coins: calculateCoinsClient('loss', diff, mode) } },
+        stats: { winner: { solveTimeMs: null, attempts: 0, accuracy: 100 }, loser: { solveTimeMs: null, attempts: 0, accuracy: 0 } }
+      });
       setWinner('you');
     };
 
     const handleYouLeft = () => {
+      const diff = question?.difficulty || 'easy';
+      const mode = matchType || '1v1';
       setMatchFinished(true);
-      setMatchResult({ message: 'You left the match.' });
+      setMatchResult({
+        message: 'You left the match.',
+        xpChanges: { winner: { xp: calculateXPClient('win', diff, mode), coins: calculateCoinsClient('win', diff, mode) }, loser: { xp: calculateXPClient('loss', diff, mode), coins: calculateCoinsClient('loss', diff, mode) } },
+        stats: { winner: { solveTimeMs: null, attempts: 0, accuracy: 100 }, loser: { solveTimeMs: null, attempts: 0, accuracy: 0 } }
+      });
       setWinner('opponent');
     };
 
@@ -247,6 +279,14 @@ const Battle = () => {
       setMatchFinished(true);
       setEditorLocked(true);
       const didIWin = (data.winners && myUserId) ? data.winners.map(id => id.toString()).includes(myUserId) : (!data.forfeitingUserId || data.forfeitingUserId.toString() !== myUserId);
+      const diff = question?.difficulty || 'easy';
+      const mode = matchType || '1v1';
+      setMatchResult(prev => ({
+        ...(prev || {}),
+        ...data,
+        xpChanges: data.xpChanges || { winner: { xp: calculateXPClient('win', diff, mode), coins: calculateCoinsClient('win', diff, mode) }, loser: { xp: calculateXPClient('loss', diff, mode), coins: calculateCoinsClient('loss', diff, mode) } },
+        stats: data.stats || { winner: { solveTimeMs: null, attempts: 0, accuracy: 100 }, loser: { solveTimeMs: null, attempts: 0, accuracy: 0 } }
+      }));
       setWinner(didIWin ? 'you' : 'opponent');
       if (didIWin) {
         setChat(prev => [...prev, { user: 'System', message: 'Opponent forfeited! You win! 🎉', type: 'system' }]);
@@ -400,6 +440,44 @@ const Battle = () => {
       window.__codequestBattleGuard = { active: false };
     };
   }, [matchFinished]);
+
+  // ── Fullscreen API hook ──────────────────────────────────────
+  useEffect(() => {
+    const onFSChange = () => {
+      const isFull = !!document.fullscreenElement;
+      setIsFullscreen(isFull);
+      if (!isFull && !matchFinished) {
+        setFullscreenExitWarning(true);
+        setTimeout(() => setFullscreenExitWarning(false), 4000);
+      }
+    };
+    document.addEventListener('fullscreenchange', onFSChange);
+    return () => document.removeEventListener('fullscreenchange', onFSChange);
+  }, [matchFinished]);
+
+  // ── Tab-switch detection ─────────────────────────────────────
+  useEffect(() => {
+    if (matchFinished) return;
+    const onVisibility = () => {
+      if (document.hidden) {
+        setTabSwitchCount(c => c + 1);
+        setTabSwitchWarning(true);
+      } else {
+        setTimeout(() => setTabSwitchWarning(false), 2000);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [matchFinished]);
+
+  const enterFullscreen = useCallback(() => {
+    document.documentElement.requestFullscreen?.().catch(() => {});
+    setShowFullscreenPrompt(false);
+  }, []);
+
+  const exitFullscreen = useCallback(() => {
+    document.exitFullscreen?.().catch(() => {});
+  }, []);
 
   const latestMatchResult = useRef(null);
   const latestQuestion = useRef(null);
@@ -559,19 +637,7 @@ const Battle = () => {
     }
   }, [matchFinished, navigate]);
 
-  const confirmLeave = useCallback(() => {
-    if (!socket || !roomId) return;
-    setShowLeaveConfirm(false);
-    socket.emit('leave-match', { roomId });
-    // Navigate via the unified MatchFinished effect
-    setMatchFinished(true);
-    setWinner('opponent');
-  }, [socket, roomId]);
 
-  const cancelLeave = useCallback(() => {
-    setShowLeaveConfirm(false);
-    setPendingNavigation(null);
-  }, []);
 
   const handleWonSeeAnalysis = async () => {
     // Legacy function, no longer used in Battle (moved to MatchResult)
@@ -782,50 +848,161 @@ const Battle = () => {
     );
   }
 
+  // ── useBlocker: intercept browser back/forward navigation ────────
+  const blocker = useBlocker(
+    useCallback(({ currentLocation, nextLocation }) =>
+      !matchFinished && currentLocation.pathname !== nextLocation.pathname,
+    [matchFinished])
+  );
+
+  // When blocker fires, show the leave-confirm modal (same as Leave button)
+  useEffect(() => {
+    if (blocker.state === 'blocked') {
+      setShowLeaveConfirm(true);
+    }
+  }, [blocker.state]);
+
+  // Patch confirmLeave to also unblock React Router when triggered via blocker
+  const handleConfirmLeave = useCallback(() => {
+    if (!socket || !roomId) return;
+    setShowLeaveConfirm(false);
+    socket.emit('leave-match', { roomId });
+    setMatchFinished(true);
+    setWinner('opponent');
+    if (blocker.state === 'blocked') blocker.proceed();
+  }, [socket, roomId, blocker]);
+
+  const handleCancelLeave = useCallback(() => {
+    setShowLeaveConfirm(false);
+    setPendingNavigation(null);
+    if (blocker.state === 'blocked') blocker.reset();
+  }, [blocker]);
+
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-dark-900">
-      {/* Leave Confirmation Modal */}
-      {showLeaveConfirm && (
-        <div
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
-          onClick={(e) => {
-            // Close modal when clicking outside
-            if (e.target === e.currentTarget) {
-              cancelLeave();
-            }
-          }}
-        >
+      {/* Leave Confirmation Modal — triggered by Leave button OR browser back */}
+      <AnimatePresence>
+        {showLeaveConfirm && (
           <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            onClick={(e) => e.stopPropagation()}
-            className="glass p-8 rounded-lg max-w-md w-full mx-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100]"
+            onClick={(e) => { if (e.target === e.currentTarget) handleCancelLeave(); }}
           >
-            <h3 className="text-2xl font-bold mb-4 text-gradient">Leave Match?</h3>
-            <p className="text-gray-300 mb-6">
-              Are you sure you want to leave this match? You will lose the match.
-            </p>
-            <div className="flex space-x-4">
-              <button
-                onClick={confirmLeave}
-                className="flex-1 bg-red-500 text-white py-2 rounded-lg font-semibold hover:bg-red-600 transition cursor-pointer"
-                type="button"
-              >
-                Yes, Leave
-              </button>
-              <button
-                onClick={cancelLeave}
-                className="flex-1 bg-primary text-dark-900 py-2 rounded-lg font-semibold hover:bg-cyan-400 transition cursor-pointer"
-                type="button"
-              >
-                No, Stay
-              </button>
-            </div>
+            <motion.div
+              initial={{ scale: 0.85, y: 30, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.85, y: 30, opacity: 0 }}
+              transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass p-8 rounded-2xl max-w-md w-full mx-4 border border-red-500/30 shadow-2xl shadow-red-500/20"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+                  <LogOut className="text-red-400" size={22} />
+                </div>
+                <h3 className="text-2xl font-bold text-white">Leave Match?</h3>
+              </div>
+              <p className="text-gray-300 mb-2">Are you sure you want to leave this match?</p>
+              <p className="text-red-400 text-sm font-semibold mb-6">⚠️ You will be declared the loser.</p>
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleConfirmLeave}
+                  className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-bold transition cursor-pointer shadow-lg shadow-red-500/30"
+                  type="button"
+                >
+                  Yes, Leave
+                </button>
+                <button
+                  onClick={handleCancelLeave}
+                  className="flex-1 bg-dark-700 border border-dark-500 text-white py-3 rounded-xl font-bold hover:bg-dark-600 transition cursor-pointer"
+                  type="button"
+                >
+                  No, Stay
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
-      {/* Top Bar explicitly for leaving since Navbar is hidden */}
+      {/* Fullscreen Enter Prompt */}
+      <AnimatePresence>
+        {showFullscreenPrompt && !matchFinished && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[90] bg-dark-900/95 backdrop-blur-lg flex flex-col items-center justify-center gap-6"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0, y: 30 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
+              className="text-center max-w-md px-6"
+            >
+              <motion.div
+                animate={{ scale: [1, 1.08, 1] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+                className="w-24 h-24 rounded-full bg-primary/10 border-2 border-primary mx-auto mb-6 flex items-center justify-center shadow-[0_0_40px] shadow-primary/40"
+              >
+                <Maximize size={40} className="text-primary" />
+              </motion.div>
+              <h2 className="text-3xl font-black text-white mb-3 tracking-tight">Enter Full Screen</h2>
+              <p className="text-gray-400 mb-2 leading-relaxed">For the best competitive experience and to ensure match integrity, please enable full screen mode.</p>
+              <p className="text-xs text-gray-600 mb-8">Tab switching will be detected and logged.</p>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={enterFullscreen}
+                  className="w-full py-4 bg-primary text-dark-900 font-black rounded-xl text-lg tracking-wider hover:brightness-110 transition-all shadow-lg shadow-primary/40 cursor-pointer"
+                >
+                  🖥️ Enter Full Screen
+                </button>
+                <button
+                  onClick={() => setShowFullscreenPrompt(false)}
+                  className="w-full py-2 text-gray-500 hover:text-gray-300 text-sm transition cursor-pointer"
+                >
+                  Continue without fullscreen
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Tab Switch Warning */}
+      <AnimatePresence>
+        {tabSwitchWarning && !matchFinished && (
+          <motion.div
+            initial={{ opacity: 0, y: -80 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -80 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-[95] flex items-center gap-3 bg-red-600 text-white px-6 py-3 rounded-2xl shadow-2xl shadow-red-500/50 border border-red-400"
+          >
+            <AlertTriangle size={20} className="animate-pulse" />
+            <span className="font-bold">Tab Switch Detected! (#{tabSwitchCount})</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Fullscreen Exit Warning */}
+      <AnimatePresence>
+        {fullscreenExitWarning && !matchFinished && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed bottom-6 right-6 z-[95] flex items-center gap-3 bg-yellow-600/90 text-white px-5 py-3 rounded-xl shadow-xl border border-yellow-400 cursor-pointer"
+            onClick={enterFullscreen}
+          >
+            <Maximize size={18} />
+            <span className="text-sm font-bold">Exited Fullscreen — Click to return</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Top Bar */}
       <div className="flex items-center justify-between px-6 py-3 bg-dark-800 border-b border-dark-700 flex-shrink-0">
         <div className="flex items-center gap-2">
           <span className="text-primary font-black tracking-widest text-lg">CODE</span>
@@ -833,14 +1010,28 @@ const Battle = () => {
           <span className="ml-2 px-2 py-1 bg-dark-700 text-gray-400 font-bold text-xs rounded-md">
             {matchType?.toUpperCase() || 'MATCH'}
           </span>
+          {tabSwitchCount > 0 && (
+            <span className="ml-2 px-2 py-1 bg-red-900/50 text-red-400 font-bold text-xs rounded-md border border-red-800">
+              ⚠️ {tabSwitchCount} tab switch{tabSwitchCount > 1 ? 'es' : ''}
+            </span>
+          )}
         </div>
-        <button
-          onClick={() => handleLeaveMatch()}
-          className="flex items-center gap-2 text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-4 py-2 rounded-lg transition font-semibold text-sm cursor-pointer"
-        >
-          <LogOut size={16} />
-          <span>Leave Match</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={isFullscreen ? exitFullscreen : enterFullscreen}
+            className="flex items-center gap-2 text-gray-400 hover:text-primary bg-dark-700 hover:bg-dark-600 px-3 py-2 rounded-lg transition text-sm font-semibold cursor-pointer"
+            title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          >
+            {isFullscreen ? <Minimize size={15} /> : <Maximize size={15} />}
+          </button>
+          <button
+            onClick={() => handleLeaveMatch()}
+            className="flex items-center gap-2 text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-4 py-2 rounded-lg transition font-semibold text-sm cursor-pointer"
+          >
+            <LogOut size={16} />
+            <span>Leave Match</span>
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">

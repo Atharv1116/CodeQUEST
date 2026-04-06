@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useBlocker } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import Editor from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Users, Clock, Send, Play, Shield, Skull, Crown, ChevronRight, Award, Zap, Lightbulb, LogOut } from 'lucide-react';
+import { Trophy, Users, Clock, Send, Play, Shield, Skull, Crown, ChevronRight, Award, Zap, Lightbulb, LogOut, Maximize, Minimize, AlertTriangle, Ban } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -45,6 +45,17 @@ const BattleRoyaleMatch = () => {
   // Final results
   const [finalResults, setFinalResults] = useState(null);
 
+  // BR Elimination state (Fix 3)
+  const [isEliminated, setIsEliminated] = useState(false);
+  const [eliminationData, setEliminationData] = useState(null); // { round, leaderboard }
+
+  // Fullscreen + tab-switch state (Fix 4)
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(true);
+  const [tabSwitchWarning, setTabSwitchWarning] = useState(false);
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [fullscreenExitWarning, setFullscreenExitWarning] = useState(false);
+
   // Reconnection flag
   const hasRecovered = useRef(false);
 
@@ -59,6 +70,10 @@ const BattleRoyaleMatch = () => {
     return null;
   }, [user, teams]);
 
+  // Ref so socket handlers can always read the latest myTeam without re-registering
+  const myTeamRef = useRef(myTeam);
+  useEffect(() => { myTeamRef.current = myTeam; }, [myTeam]);
+
   // Leave Match states
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const handleLeaveMatch = () => {
@@ -68,14 +83,63 @@ const BattleRoyaleMatch = () => {
       setShowLeaveConfirm(true);
     }
   };
+
+  // ── useBlocker: intercept browser back/forward navigation ────────
+  const blocker = useBlocker(
+    useCallback(({ currentLocation, nextLocation }) =>
+      matchStatus !== 'finished' && currentLocation.pathname !== nextLocation.pathname,
+    [matchStatus])
+  );
+  useEffect(() => {
+    if (blocker.state === 'blocked') setShowLeaveConfirm(true);
+  }, [blocker.state]);
+
   const confirmLeave = () => {
     setShowLeaveConfirm(false);
-    if (socket && roomId) {
-      socket.emit('leave-br-match', { roomId });
-    }
-    navigate('/battle-royale-mode');
+    if (socket && roomId) socket.emit('leave-br-match', { roomId });
+    if (blocker.state === 'blocked') blocker.proceed();
+    else navigate('/battle-royale-mode');
   };
-  const cancelLeave = () => setShowLeaveConfirm(false);
+  const cancelLeave = () => {
+    setShowLeaveConfirm(false);
+    if (blocker.state === 'blocked') blocker.reset();
+  };
+
+  // ── Fullscreen API + Tab-switch ────────────────────────────────────
+  useEffect(() => {
+    const onFSChange = () => {
+      const isFull = !!document.fullscreenElement;
+      setIsFullscreen(isFull);
+      if (!isFull && matchStatus === 'active') {
+        setFullscreenExitWarning(true);
+        setTimeout(() => setFullscreenExitWarning(false), 4000);
+      }
+    };
+    document.addEventListener('fullscreenchange', onFSChange);
+    return () => document.removeEventListener('fullscreenchange', onFSChange);
+  }, [matchStatus]);
+
+  useEffect(() => {
+    if (matchStatus !== 'active') return;
+    const onVisibility = () => {
+      if (document.hidden) {
+        setTabSwitchCount(c => c + 1);
+        setTabSwitchWarning(true);
+      } else {
+        setTimeout(() => setTabSwitchWarning(false), 2000);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [matchStatus]);
+
+  const enterFullscreen = useCallback(() => {
+    document.documentElement.requestFullscreen?.().catch(() => {});
+    setShowFullscreenPrompt(false);
+  }, []);
+  const exitFullscreen = useCallback(() => {
+    document.exitFullscreen?.().catch(() => {});
+  }, []);
 
   // ── State recovery on mount ───────────────────────────
   useEffect(() => {
@@ -137,13 +201,23 @@ const BattleRoyaleMatch = () => {
     };
 
     const onRoundEnded = (data) => {
+      const lb = data.leaderboard || [];
       setShowRoundResults(true);
       setEditorLocked(true);
       setRoundResults(data);
-      setLeaderboard(data.leaderboard || []);
+      setLeaderboard(lb);
       setMatchStatus('between-rounds');
-      // Fix 15: Track whether we're waiting for admin
       setWaitingForAdmin(!!data.waitingForAdmin);
+
+      // Fix 3: Immediately check if my team was eliminated this round
+      const currentMyTeam = myTeamRef.current;
+      if (currentMyTeam !== null) {
+        const myTeamData = lb.find(t => t.teamNumber === currentMyTeam);
+        if (myTeamData?.eliminated || myTeamData?.status === 'eliminated') {
+          setIsEliminated(true);
+          setEliminationData({ round: data.round || round, leaderboard: lb });
+        }
+      }
     };
 
     const onRoundStarted = (data) => {
@@ -423,42 +497,197 @@ const BattleRoyaleMatch = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900">
       {/* Leave Confirmation Modal */}
-      {showLeaveConfirm && (
-        <div
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) cancelLeave();
-          }}
-        >
+      <AnimatePresence>
+        {showLeaveConfirm && (
           <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            onClick={(e) => e.stopPropagation()}
-            className="glass p-8 rounded-lg max-w-md w-full mx-4"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100]"
+            onClick={(e) => { if (e.target === e.currentTarget) cancelLeave(); }}
           >
-            <h3 className="text-2xl font-bold mb-4 text-gradient">Leave Match?</h3>
-            <p className="text-gray-300 mb-6">
-              Are you sure you want to leave this match? You will be auto-eliminated without eliminating your teammates.
-            </p>
-            <div className="flex space-x-4">
-              <button
-                onClick={confirmLeave}
-                className="flex-1 bg-red-500 text-white py-2 rounded-lg font-semibold hover:bg-red-600 transition cursor-pointer"
-                type="button"
-              >
-                Yes, Leave
-              </button>
-              <button
-                onClick={cancelLeave}
-                className="flex-1 bg-primary text-dark-900 py-2 rounded-lg font-semibold hover:bg-cyan-400 transition cursor-pointer"
-                type="button"
-              >
-                No, Stay
-              </button>
-            </div>
+            <motion.div
+              initial={{ scale: 0.85, y: 30, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.85, y: 30, opacity: 0 }}
+              transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-gray-900 border border-red-500/30 p-8 rounded-2xl max-w-md w-full mx-4 shadow-2xl shadow-red-500/20"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+                  <LogOut className="text-red-400" size={22} />
+                </div>
+                <h3 className="text-2xl font-bold text-white">Leave Match?</h3>
+              </div>
+              <p className="text-gray-300 mb-2">Are you sure you want to leave this match?</p>
+              <p className="text-red-400 text-sm font-semibold mb-6">⚠️ You will be eliminated individually. Your team may continue.</p>
+              <div className="flex space-x-3">
+                <button onClick={confirmLeave} className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-bold transition cursor-pointer" type="button">
+                  Yes, Leave
+                </button>
+                <button onClick={cancelLeave} className="flex-1 bg-gray-700 border border-gray-600 text-white py-3 rounded-xl font-bold hover:bg-gray-600 transition cursor-pointer" type="button">
+                  No, Stay
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
+
+      {/* Eliminated Overlay — shows IMMEDIATELY on round-end if my team was eliminated */}
+      <AnimatePresence>
+        {isEliminated && !finalResults && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 z-[85] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-6"
+          >
+            <motion.div
+              initial={{ scale: 0.7, opacity: 0, y: 40 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              transition={{ type: 'spring', stiffness: 180, damping: 18 }}
+              className="w-full max-w-2xl"
+            >
+              {/* Banner */}
+              <div className="text-center mb-8">
+                <motion.div
+                  animate={{ rotate: [0, -8, 8, -4, 4, 0] }}
+                  transition={{ duration: 0.6, delay: 0.3 }}
+                  className="w-24 h-24 mx-auto mb-4 rounded-full bg-red-950/60 border-2 border-red-500 flex items-center justify-center shadow-[0_0_40px] shadow-red-500/50"
+                >
+                  <Skull size={42} className="text-red-400" />
+                </motion.div>
+                <motion.h1
+                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+                  className="text-5xl font-black text-red-400 tracking-widest uppercase mb-2"
+                >
+                  Eliminated
+                </motion.h1>
+                <p className="text-gray-400 text-lg">
+                  Your team was eliminated in Round {eliminationData?.round}
+                </p>
+              </div>
+
+              {/* Leaderboard */}
+              <div className="bg-gray-900/80 border border-gray-700 rounded-2xl p-5 mb-6">
+                <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Award className="text-yellow-400" size={20} /> Final Standings
+                </h2>
+                <div className="space-y-2">
+                  {(eliminationData?.leaderboard || []).map((team, idx) => (
+                    <motion.div
+                      key={team.teamNumber}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.1 + idx * 0.06 }}
+                      className={`flex items-center gap-3 p-3 rounded-xl border ${
+                        team.teamNumber === myTeam
+                          ? 'bg-red-900/30 border-red-500/50'
+                          : team.rank === 1
+                          ? 'bg-yellow-900/20 border-yellow-500/40'
+                          : 'bg-gray-800/50 border-gray-700/50'
+                      }`}
+                    >
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${
+                        team.rank === 1 ? 'bg-yellow-500 text-black' :
+                        team.rank === 2 ? 'bg-gray-400 text-black' :
+                        team.rank === 3 ? 'bg-orange-600 text-white' :
+                        'bg-gray-700 text-gray-300'
+                      }`}>
+                        #{team.rank}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-bold">Team {team.teamNumber}</span>
+                          {team.teamNumber === myTeam && <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded font-bold">YOU</span>}
+                          {team.rank === 1 && <Crown size={14} className="text-yellow-400" />}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {team.status === 'eliminated' ? `Eliminated R${team.eliminatedInRound || '?'}` : '🏆 Still Active'}
+                        </div>
+                      </div>
+                      {team.teamNumber === myTeam && (
+                        <Ban size={18} className="text-red-400 flex-shrink-0" />
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Return Button */}
+              <motion.button
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
+                onClick={() => navigate('/battle-royale-mode')}
+                className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-2xl font-black text-lg tracking-wider transition-all hover:scale-[1.02] shadow-xl shadow-purple-500/30 cursor-pointer"
+              >
+                Return to Lobby
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Fullscreen Prompt */}
+      <AnimatePresence>
+        {showFullscreenPrompt && matchStatus === 'active' && !isEliminated && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[80] bg-gray-950/96 backdrop-blur-xl flex items-center justify-center p-6"
+          >
+            <motion.div
+              initial={{ scale: 0.8, y: 30, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 200 }}
+              className="text-center max-w-md"
+            >
+              <motion.div
+                animate={{ scale: [1, 1.1, 1] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+                className="w-24 h-24 rounded-full bg-purple-500/10 border-2 border-purple-500 mx-auto mb-6 flex items-center justify-center shadow-[0_0_40px] shadow-purple-500/40"
+              >
+                <Maximize size={40} className="text-purple-400" />
+              </motion.div>
+              <h2 className="text-3xl font-black text-white mb-2">Enter Full Screen</h2>
+              <p className="text-gray-400 mb-1">Enable fullscreen for the competitive Battle Royale experience.</p>
+              <p className="text-xs text-gray-600 mb-8">Tab switching will be detected and logged.</p>
+              <div className="flex flex-col gap-3">
+                <button onClick={enterFullscreen} className="w-full py-4 bg-gradient-to-r from-purple-600 to-cyan-600 text-white font-black rounded-xl hover:brightness-110 transition shadow-lg cursor-pointer">
+                  🖥️ Enter Full Screen
+                </button>
+                <button onClick={() => setShowFullscreenPrompt(false)} className="w-full py-2 text-gray-500 hover:text-gray-300 text-sm transition cursor-pointer">
+                  Continue without fullscreen
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Tab Switch Warning */}
+      <AnimatePresence>
+        {tabSwitchWarning && (
+          <motion.div
+            initial={{ opacity: 0, y: -80 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -80 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-[95] flex items-center gap-3 bg-red-600 text-white px-6 py-3 rounded-2xl shadow-2xl shadow-red-500/50 border border-red-400"
+          >
+            <AlertTriangle size={20} className="animate-pulse" />
+            <span className="font-bold">Tab Switch Detected! (#{tabSwitchCount})</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Fullscreen Exit Warning */}
+      <AnimatePresence>
+        {fullscreenExitWarning && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed bottom-6 right-6 z-[95] flex items-center gap-3 bg-yellow-600/90 text-white px-5 py-3 rounded-xl shadow-xl border border-yellow-400 cursor-pointer"
+            onClick={enterFullscreen}
+          >
+            <Maximize size={18} />
+            <span className="text-sm font-bold">Exited Fullscreen — Click to return</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Top Bar */}
       <div className="bg-gray-900/80 backdrop-blur-sm border-b border-gray-700 px-4 py-3 flex-shrink-0">
@@ -470,7 +699,6 @@ const BattleRoyaleMatch = () => {
               <span className="text-white font-bold text-lg">Round {round}</span>
               <span className="text-gray-400 text-sm">of {totalRounds}</span>
             </div>
-            {/* Elimination info */}
             {eliminationSchedule.length > 0 && (
               <div className="hidden md:flex items-center gap-1 text-sm text-gray-400">
                 {eliminationSchedule.map((s, i) => (
@@ -481,6 +709,11 @@ const BattleRoyaleMatch = () => {
                 ))}
               </div>
             )}
+            {tabSwitchCount > 0 && (
+              <span className="px-2 py-1 bg-red-900/50 text-red-400 font-bold text-xs rounded-md border border-red-800">
+                ⚠️ {tabSwitchCount} switch{tabSwitchCount > 1 ? 'es' : ''}
+              </span>
+            )}
           </div>
 
           {/* Timer */}
@@ -489,8 +722,8 @@ const BattleRoyaleMatch = () => {
             <span>{formatTime(timeLeft)}</span>
           </div>
 
-          {/* My Team Badge */}
-          <div className="flex items-center gap-4">
+          {/* Right: Team badge + controls */}
+          <div className="flex items-center gap-3">
             {myTeam && (
               <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border ${mySolved ? 'bg-green-900/40 border-green-500/50' : 'bg-purple-900/40 border-purple-500/50'}`}>
                 <Shield className={`w-5 h-5 ${mySolved ? 'text-green-400' : 'text-purple-400'}`} />
@@ -498,7 +731,13 @@ const BattleRoyaleMatch = () => {
                 {mySolved && <span className="text-green-400 font-semibold ml-2">✅ Solved</span>}
               </div>
             )}
-            {/* Leave Match Button */}
+            <button
+              onClick={isFullscreen ? exitFullscreen : enterFullscreen}
+              className="flex items-center gap-1 text-gray-400 hover:text-purple-400 bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded-lg transition text-sm cursor-pointer"
+              title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            >
+              {isFullscreen ? <Minimize size={15} /> : <Maximize size={15} />}
+            </button>
             <button
               onClick={() => handleLeaveMatch()}
               className="flex items-center gap-2 text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-4 py-2 rounded-lg transition font-semibold text-sm cursor-pointer"

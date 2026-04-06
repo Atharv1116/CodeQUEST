@@ -1435,6 +1435,11 @@ io.on('connection', (socket) => {
         winner: { solveTimeMs: submitTimeMs, attempts: winnerAttempts, accuracy: 100 },
         loser: { solveTimeMs: null, attempts: loserAttempts, accuracy: 0 }
       },
+      // perPlayerStats: keyed by userId — lets client always find their OWN data
+      perPlayerStats: {
+        ...(winnerUserId ? { [winnerUserId]: { solveTimeMs: submitTimeMs, attempts: winnerAttempts, accuracy: 100, isWinner: true } } : {}),
+        ...(loserUserId  ? { [loserUserId]:  { solveTimeMs: null, attempts: loserAttempts, accuracy: 0, isWinner: false } } : {})
+      },
       message: '✅ Correct submission! Match over.'
     };
     console.log(`[Server] emitMatchFinished1v1 → room ${roomId}, winnerUserId=${winnerUserId}, loserUserId=${loserUserId}`);
@@ -1475,6 +1480,11 @@ io.on('connection', (socket) => {
       xpChanges: {
         winner: { xp: winnerXP, coins: winnerCoins },
         loser: { xp: loserXP, coins: loserCoins }
+      },
+      // perPlayerStats: keyed by userId
+      perPlayerStats: {
+        ...Object.fromEntries(winningTeamIds.map(uid => [uid.toString(), { solveTimeMs: null, attempts: 1, accuracy: 100, isWinner: true }])),
+        ...Object.fromEntries(losingTeamIds.map(uid => [uid.toString(), { solveTimeMs: null, attempts: 0, accuracy: 0, isWinner: false }]))
       },
       message: `✅ Team ${teamName} wins!`
     };
