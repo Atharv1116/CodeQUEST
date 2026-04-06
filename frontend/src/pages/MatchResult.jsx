@@ -51,16 +51,18 @@ const MatchResult = () => {
 
   // ── Rating row ──────────────────────────────────────────────────
   const myRatingRow = (() => {
-    if (!matchResult?.ratingChanges?.length) return null;
-    // Try by userId first (most reliable)
-    if (myUserId) {
-      const row = matchResult.ratingChanges.find(r => r.userId?.toString() === myUserId);
-      if (row) return row;
+    let rowObj = null;
+    if (matchResult?.ratingChanges?.length) {
+      if (myUserId) {
+        rowObj = matchResult.ratingChanges.find(r => r.userId?.toString() === myUserId);
+      }
+      if (!rowObj) {
+        if (isWin) rowObj = matchResult.ratingChanges.find(r => (r.delta ?? 0) > 0) || matchResult.ratingChanges[0];
+        else if (isDraw) rowObj = matchResult.ratingChanges[0];
+        else rowObj = matchResult.ratingChanges.find(r => (r.delta ?? 0) <= 0) || matchResult.ratingChanges[matchResult.ratingChanges.length - 1];
+      }
     }
-    // Fallback: by outcome
-    if (isWin) return matchResult.ratingChanges.find(r => (r.delta ?? 0) > 0) || matchResult.ratingChanges[0];
-    if (isDraw) return matchResult.ratingChanges[0];
-    return matchResult.ratingChanges.find(r => (r.delta ?? 0) <= 0) || matchResult.ratingChanges[matchResult.ratingChanges.length - 1];
+    return rowObj || { before: 0, after: 0, delta: 0 }; // Fallback to avoid vanishing UI
   })();
 
   const delta = myRatingRow ? (myRatingRow.delta ?? (myRatingRow.after - myRatingRow.before)) : null;

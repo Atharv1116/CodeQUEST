@@ -1022,133 +1022,58 @@ io.on('connection', (socket) => {
 
     const leavingUserId = playerSessions.get(socket.id);
     const remainingPlayers = state.players.filter(id => id !== socket.id);
+    const matchDurationMs = (state.timerDuration || 1800) * 1000;
+    const question = roomQuestion.get(roomId);
+    const submitTimeMs = 0; // Forfeit time is technically 0
 
     if (state.type === '1v1' && remainingPlayers.length === 1) {
       const winnerId = remainingPlayers[0];
-      const winnerUserId = state.playerIds.find((id, idx) =>
-        state.players[idx] === winnerId
-      ) || playerSessions.get(winnerId);
+      const opponentId = socket.id;
 
       state.finished = true;
-      state.winner = winnerId;
       roomState.set(roomId, state);
 
-      // Update winner stats
-      if (winnerUserId) {
-        try {
-          const winner = await User.findById(winnerUserId);
-          if (winner) {
-            winner.wins += 1;
-            winner.matches += 1;
-            winner.xp += calculateXP('win', 'easy', '1v1');
-            winner.coins += calculateCoins('win', 'easy', '1v1');
-            await winner.save();
-          }
-        } catch (err) {
-          console.error('Error updating winner stats:', err);
-        }
-      }
+      // Phase 1: Emit instantly
+      emitMatchFinished1v1(roomId, winnerId, opponentId, state, submitTimeMs, 'Opponent left the match. You win!');
 
-      // Notify winner
-      io.to(winnerId).emit('opponent-left-match');
-      io.to(winnerId).emit('match-finished', {
-        roomId,
-        winner: 'you',
-        message: 'Opponent left the match. You win!',
-        reason: 'opponent-left'
-      });
+      // Phase 2: db save & pipeline
+      runPostMatchPipeline1v1(roomId, winnerId, opponentId, state, question, submitTimeMs, matchDurationMs)
+        .catch(err => console.error('[Pipeline] Unhandled 1v1 error on forfeit:', err.message));
+
     } else if (state.type === '2v2') {
-      // Determine which team the leaving player belongs to
-      const isBlue = state.teams.blue && state.teams.blue.includes(socket.id);
-      const leavingTeam = isBlue ? 'blue' : 'red';
-      const winningTeam = isBlue ? 'red' : 'blue';
-      const winningTeamIds = state.teamIds[winningTeam];
-      const losingTeamIds = state.teamIds[leavingTeam];
+      const isRed = state.teams && state.teams.red && state.teams.red.includes(socket.id);
+      const leavingTeam = isRed ? 'red' : 'blue';
+      const winningTeam = isRed ? 'blue' : 'red';
+      const winningTeamSockets = state.teams ? (state.teams[winningTeam] || []) : [];
 
       state.finished = true;
-      state.winnerTeam = winningTeam;
       roomState.set(roomId, state);
 
-      const question = roomQuestion.get(roomId);
-      const difficulty = question?.difficulty || 'easy';
+      // Phase 1
+      emitMatchFinished2v2(roomId, winningTeam, winningTeamSockets, state, 'Opposing team left the match. You win!');
 
-      // Update winners (opposing team)
-      if (winningTeamIds && winningTeamIds.length > 0) {
-        try {
-          const winners = await User.find({ _id: { $in: winningTeamIds } });
-          for (const winner of winners) {
-            winner.wins += 1;
-            winner.matches += 1;
-            winner.xp += calculateXP('win', difficulty, '2v2');
-            winner.coins += calculateCoins('win', difficulty, '2v2');
-            winner.streak += 1;
-            await checkBadges(winner, require('./models/Badge'));
-            await winner.save();
-          }
-        } catch (err) {
-          console.error('Error updating winner stats:', err);
-        }
-      }
+      // Phase 2
+      runPostMatchPipeline2v2(roomId, winningTeam, state, question, submitTimeMs, matchDurationMs)
+        .catch(err => console.error('[Pipeline] Unhandled 2v2 error on forfeit:', err.message));
 
-      // Update losers (leaving player's team)
-      if (losingTeamIds && losingTeamIds.length > 0) {
-        try {
-          const losers = await User.find({ _id: { $in: losingTeamIds } });
-          for (const loser of losers) {
-            loser.losses += 1;
-            loser.matches += 1;
-            loser.xp += calculateXP('loss', difficulty, '2v2');
-            loser.streak = 0;
-            await loser.save();
-          }
-        } catch (err) {
-          console.error('Error updating loser stats:', err);
-        }
-      }
-
-      // Save match record
-      try {
-        await Match.create({
-          roomId,
-          type: '2v2',
-          players: [...winningTeamIds, ...losingTeamIds],
-          playerSocketIds: [...state.teams[winningTeam], ...state.teams[leavingTeam]],
-          question: question?._id || null,
-          winnerTeam: winningTeam,
-          results: [
-            ...winningTeamIds.map(id => ({ player: id, solved: true, score: 100 })),
-            ...losingTeamIds.map(id => ({ player: id, solved: false, score: 0 }))
-          ],
-          status: 'finished',
-          startedAt: state.startedAt,
-          finishedAt: new Date()
+    } else if (state.type === 'battle-royale') {
+      if (state.scores?.has(socket.id)) {
+        if (!state.eliminated) state.eliminated = [];
+        state.eliminated.push(socket.id);
+        const sc = state.scores.get(socket.id);
+        sc.attempts = (sc.attempts || 0) + 1;
+        state.scores.set(socket.id, sc);
+        io.to(roomId).emit('battle-royale-eliminations', {
+          eliminated: [socket.id],
+          round: state.round || 1,
+          remaining: state.players.length - state.eliminated.length
         });
-      } catch (err) {
-        console.warn('Error saving match record:', err.message);
       }
-
-      // Notify winning team
-      state.teams[winningTeam].forEach(winnerSocketId => {
-        io.to(winnerSocketId).emit('opponent-left-match');
-        io.to(winnerSocketId).emit('match-finished', {
-          roomId,
-          winnerTeam: winningTeam,
-          message: `Opposing team left. Team ${winningTeam} wins!`,
-          reason: 'opponent-left'
-        });
-      });
-
-      // Notify losing team
-      state.teams[leavingTeam].forEach(loserSocketId => {
-        if (loserSocketId !== socket.id) {
-          io.to(loserSocketId).emit('match-finished', {
-            roomId,
-            winnerTeam: winningTeam,
-            message: `A teammate left. Team ${winningTeam} wins!`,
-            reason: 'teammate-left'
-          });
+    } else if (state.type === 'custom-battle-royale') {
+        const brUserId = playerSessions.get(socket.id);
+        if (brUserId) { 
+           brEngine.handlePlayerDisconnect(roomId, socket.id, brUserId);
         }
-      });
     }
 
     // Notify the leaving player
@@ -1405,7 +1330,7 @@ io.on('connection', (socket) => {
   });
 
   // Phase 1: emit match-finished IMMEDIATELY (no DB dependency)
-  function emitMatchFinished1v1(roomId, winnerId, opponentId, state, submitTimeMs) {
+  function emitMatchFinished1v1(roomId, winnerId, opponentId, state, submitTimeMs, customMessage) {
     const winnerAttempts = state.playerAttempts?.[winnerId] || 1;
     const loserAttempts = state.playerAttempts?.[opponentId] || 0;
     const winnerUserId = playerSessions.get(winnerId) || null;
@@ -1440,7 +1365,7 @@ io.on('connection', (socket) => {
         ...(winnerUserId ? { [winnerUserId]: { solveTimeMs: submitTimeMs, attempts: winnerAttempts, accuracy: 100, isWinner: true } } : {}),
         ...(loserUserId  ? { [loserUserId]:  { solveTimeMs: null, attempts: loserAttempts, accuracy: 0, isWinner: false } } : {})
       },
-      message: '✅ Correct submission! Match over.'
+      message: customMessage || '✅ Correct submission! Match over.'
     };
     console.log(`[Server] emitMatchFinished1v1 → room ${roomId}, winnerUserId=${winnerUserId}, loserUserId=${loserUserId}`);
     io.to(roomId).emit('match-finished', payload);
@@ -1458,7 +1383,7 @@ io.on('connection', (socket) => {
   }
 
   // Phase 1: 2v2 immediate emit
-  function emitMatchFinished2v2(roomId, teamName, winningTeamSockets, state) {
+  function emitMatchFinished2v2(roomId, teamName, winningTeamSockets, state, customMessage) {
     const losingTeamName = teamName === 'red' ? 'blue' : 'red';
     const winningTeamIds = (state.teamIds || {})[teamName] || [];
     const losingTeamIds = (state.teamIds || {})[losingTeamName] || [];
@@ -1486,7 +1411,7 @@ io.on('connection', (socket) => {
         ...Object.fromEntries(winningTeamIds.map(uid => [uid.toString(), { solveTimeMs: null, attempts: 1, accuracy: 100, isWinner: true }])),
         ...Object.fromEntries(losingTeamIds.map(uid => [uid.toString(), { solveTimeMs: null, attempts: 0, accuracy: 0, isWinner: false }]))
       },
-      message: `✅ Team ${teamName} wins!`
+      message: customMessage || `✅ Team ${teamName} wins!`
     };
     console.log(`[Server] emitMatchFinished2v2 → room ${roomId}, team=${teamName}, winnerIds=${winningTeamIds}`);
     io.to(roomId).emit('match-finished', payload);

@@ -230,30 +230,8 @@ const Battle = () => {
       }
     };
 
-    const handleOpponentLeft = () => {
-      console.log('[Battle] opponent-left-match — auto-win');
-      const diff = question?.difficulty || 'easy';
-      const mode = matchType || '1v1';
-      setMatchFinished(true);
-      setMatchResult({
-        message: 'Opponent disconnected. You win!',
-        xpChanges: { winner: { xp: calculateXPClient('win', diff, mode), coins: calculateCoinsClient('win', diff, mode) }, loser: { xp: calculateXPClient('loss', diff, mode), coins: calculateCoinsClient('loss', diff, mode) } },
-        stats: { winner: { solveTimeMs: null, attempts: 0, accuracy: 100 }, loser: { solveTimeMs: null, attempts: 0, accuracy: 0 } }
-      });
-      setWinner('you');
-    };
-
-    const handleYouLeft = () => {
-      const diff = question?.difficulty || 'easy';
-      const mode = matchType || '1v1';
-      setMatchFinished(true);
-      setMatchResult({
-        message: 'You left the match.',
-        xpChanges: { winner: { xp: calculateXPClient('win', diff, mode), coins: calculateCoinsClient('win', diff, mode) }, loser: { xp: calculateXPClient('loss', diff, mode), coins: calculateCoinsClient('loss', diff, mode) } },
-        stats: { winner: { solveTimeMs: null, attempts: 0, accuracy: 100 }, loser: { solveTimeMs: null, attempts: 0, accuracy: 0 } }
-      });
-      setWinner('opponent');
-    };
+    // No manual opponent-left handlers needed; Server's leave-match event 
+    // now automatically emits a full `match-finished` payload to the entire room.
 
     // room-state: server sends this after join-room if a match is already in progress
     // (handles reconnection recovery)
@@ -299,8 +277,6 @@ const Battle = () => {
     socket.on('match-locked', handleMatchLocked);
     socket.on('match-finished', handleMatchFinished);
     socket.on('match-forfeited', handleMatchForfeited);
-    socket.on('opponent-left-match', handleOpponentLeft);
-    socket.on('you-left-match', handleYouLeft);
     socket.on('rating-update', handleRatingUpdate);
     socket.on('room-state', handleRoomState);
 
@@ -310,8 +286,6 @@ const Battle = () => {
       socket.off('match-locked', handleMatchLocked);
       socket.off('match-finished', handleMatchFinished);
       socket.off('match-forfeited', handleMatchForfeited);
-      socket.off('opponent-left-match', handleOpponentLeft);
-      socket.off('you-left-match', handleYouLeft);
       socket.off('rating-update', handleRatingUpdate);
       socket.off('room-state', handleRoomState);
     };
@@ -641,9 +615,8 @@ const Battle = () => {
   const handleConfirmLeave = useCallback(() => {
     if (!socket || !roomId) return;
     setShowLeaveConfirm(false);
+    // Notify server; the server will finish the match, update DB, and emit 'match-finished' to us
     socket.emit('leave-match', { roomId });
-    setMatchFinished(true);
-    setWinner('opponent');
   }, [socket, roomId]);
 
   const handleCancelLeave = useCallback(() => {
