@@ -718,6 +718,20 @@ const Battle = () => {
     );
   };
 
+  // ── Back-button guard — MUST be before all early returns (Rules of Hooks) ──
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (matchFinished) return;
+    window.history.pushState({ battleGuard: true }, '', window.location.href);
+    const handlePopState = () => {
+      if (matchFinished) return;
+      window.history.pushState({ battleGuard: true }, '', window.location.href);
+      setShowLeaveConfirm(true);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [matchFinished]);
+
   // ---- Full-screen Analysis View ----
   if (showAnalysisScreen) {
     const myRating = matchResult?.ratingChanges?.find(r => r.username === matchResult?.stats?.winner?.username || r.after !== undefined);
@@ -861,25 +875,7 @@ const Battle = () => {
     );
   }
 
-  // ── Back-button guard (works with BrowserRouter) ──────────────────
-  // Push a dummy history entry on mount so the first browser-back is interceptable.
-  // When popstate fires, show the leave modal and re-push to keep the user here.
-  useEffect(() => {
-    if (matchFinished) return;
-    // Push a dummy state so the browser back button has somewhere to go
-    window.history.pushState({ battleGuard: true }, '', window.location.href);
 
-    const handlePopState = (e) => {
-      if (matchFinished) return;
-      // Re-push so subsequent backs are also intercepted
-      window.history.pushState({ battleGuard: true }, '', window.location.href);
-      // Show the leave confirmation modal
-      setShowLeaveConfirm(true);
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [matchFinished]);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-dark-900">
