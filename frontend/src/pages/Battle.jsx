@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate, useBlocker } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import Editor from '@monaco-editor/react';
@@ -637,6 +637,19 @@ const Battle = () => {
     }
   }, [matchFinished, navigate]);
 
+  // Called by "Yes, Leave" button — works for both in-page button and browser back
+  const handleConfirmLeave = useCallback(() => {
+    if (!socket || !roomId) return;
+    setShowLeaveConfirm(false);
+    socket.emit('leave-match', { roomId });
+    setMatchFinished(true);
+    setWinner('opponent');
+  }, [socket, roomId]);
+
+  const handleCancelLeave = useCallback(() => {
+    setShowLeaveConfirm(false);
+    setPendingNavigation(null);
+  }, []);
 
 
   const handleWonSeeAnalysis = async () => {
@@ -848,35 +861,25 @@ const Battle = () => {
     );
   }
 
-  // ── useBlocker: intercept browser back/forward navigation ────────
-  const blocker = useBlocker(
-    useCallback(({ currentLocation, nextLocation }) =>
-      !matchFinished && currentLocation.pathname !== nextLocation.pathname,
-    [matchFinished])
-  );
-
-  // When blocker fires, show the leave-confirm modal (same as Leave button)
+  // ── Back-button guard (works with BrowserRouter) ──────────────────
+  // Push a dummy history entry on mount so the first browser-back is interceptable.
+  // When popstate fires, show the leave modal and re-push to keep the user here.
   useEffect(() => {
-    if (blocker.state === 'blocked') {
+    if (matchFinished) return;
+    // Push a dummy state so the browser back button has somewhere to go
+    window.history.pushState({ battleGuard: true }, '', window.location.href);
+
+    const handlePopState = (e) => {
+      if (matchFinished) return;
+      // Re-push so subsequent backs are also intercepted
+      window.history.pushState({ battleGuard: true }, '', window.location.href);
+      // Show the leave confirmation modal
       setShowLeaveConfirm(true);
-    }
-  }, [blocker.state]);
+    };
 
-  // Patch confirmLeave to also unblock React Router when triggered via blocker
-  const handleConfirmLeave = useCallback(() => {
-    if (!socket || !roomId) return;
-    setShowLeaveConfirm(false);
-    socket.emit('leave-match', { roomId });
-    setMatchFinished(true);
-    setWinner('opponent');
-    if (blocker.state === 'blocked') blocker.proceed();
-  }, [socket, roomId, blocker]);
-
-  const handleCancelLeave = useCallback(() => {
-    setShowLeaveConfirm(false);
-    setPendingNavigation(null);
-    if (blocker.state === 'blocked') blocker.reset();
-  }, [blocker]);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [matchFinished]);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-dark-900">

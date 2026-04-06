@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useParams, useNavigate, useBlocker } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import Editor from '@monaco-editor/react';
@@ -84,26 +84,25 @@ const BattleRoyaleMatch = () => {
     }
   };
 
-  // ── useBlocker: intercept browser back/forward navigation ────────
-  const blocker = useBlocker(
-    useCallback(({ currentLocation, nextLocation }) =>
-      matchStatus !== 'finished' && currentLocation.pathname !== nextLocation.pathname,
-    [matchStatus])
-  );
+  // ── Back-button guard (popstate — works with BrowserRouter) ────────
   useEffect(() => {
-    if (blocker.state === 'blocked') setShowLeaveConfirm(true);
-  }, [blocker.state]);
+    if (matchStatus === 'finished') return;
+    window.history.pushState({ brGuard: true }, '', window.location.href);
+    const handlePopState = () => {
+      if (matchStatus === 'finished') return;
+      window.history.pushState({ brGuard: true }, '', window.location.href);
+      setShowLeaveConfirm(true);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [matchStatus]);
 
   const confirmLeave = () => {
     setShowLeaveConfirm(false);
     if (socket && roomId) socket.emit('leave-br-match', { roomId });
-    if (blocker.state === 'blocked') blocker.proceed();
-    else navigate('/battle-royale-mode');
+    navigate('/battle-royale-mode');
   };
-  const cancelLeave = () => {
-    setShowLeaveConfirm(false);
-    if (blocker.state === 'blocked') blocker.reset();
-  };
+  const cancelLeave = () => setShowLeaveConfirm(false);
 
   // ── Fullscreen API + Tab-switch ────────────────────────────────────
   useEffect(() => {
