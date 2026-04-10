@@ -228,5 +228,565 @@
         "isHidden": true
       }
     ]
+  },
+  {
+    "title": "Two Sum Pairs",
+    "description": "Given an array of n integers and a target value T, find all pairs of indices (i, j) where i < j such that arr[i] + arr[j] == T. Print each pair on a separate line as 'i j' (0-indexed). If no pairs exist, print 'NONE'.",
+    "inputFormat": "First line: two integers n and T.\nSecond line: n space-separated integers.",
+    "outputFormat": "Each valid pair 'i j' on its own line in ascending order of i, then j. If none, print 'NONE'.",
+    "sampleInput": "5 9\n2 7 4 5 5",
+    "sampleOutput": "0 1\n2 4\n3 3",
+    "difficulty": "medium",
+    "tags": ["arrays", "two-pointers"],
+    "solution": "import sys\nlines = sys.stdin.read().strip().split('\\n')\nfirst = lines[0].split()\nn, T = int(first[0]), int(first[1])\narr = list(map(int, lines[1].split()))\nresult = []\nfor i in range(n):\n    for j in range(i+1, n):\n        if arr[i] + arr[j] == T:\n            result.append(f'{i} {j}')\nif result:\n    print('\\n'.join(result))\nelse:\n    print('NONE')",
+    "testCases": [
+      {
+        "input": "6 10\n1 9 3 7 5 5",
+        "output": "0 1\n1 3\n4 5",
+        "isHidden": true
+      },
+      {
+        "input": "4 100\n1 2 3 4",
+        "output": "NONE",
+        "isHidden": true
+      },
+      {
+        "input": "3 6\n3 3 3",
+        "output": "0 1\n0 2\n1 2",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Frequency Counter",
+    "description": "Given a string, count the frequency of each character and print them in alphabetical order. Print each character and its count separated by a space, one per line. Only count alphabetic characters (a-z), case insensitive.",
+    "inputFormat": "Single line string",
+    "outputFormat": "Lines of 'char count' sorted alphabetically by character",
+    "sampleInput": "Hello World",
+    "sampleOutput": "d 1\ne 1\nh 1\nl 3\no 2\nr 1\nw 1",
+    "difficulty": "medium",
+    "tags": ["strings", "hash-map"],
+    "solution": "import sys\nfrom collections import Counter\ns = sys.stdin.read().strip().lower()\ncounts = Counter(c for c in s if c.isalpha())\nfor ch in sorted(counts):\n    print(ch, counts[ch])",
+    "testCases": [
+      {
+        "input": "aabbcc",
+        "output": "a 2\nb 2\nc 2",
+        "isHidden": true
+      },
+      {
+        "input": "Mississippi",
+        "output": "i 4\nm 1\np 2\ns 4",
+        "isHidden": true
+      },
+      {
+        "input": "123!@#",
+        "output": "",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Matrix Diagonal Sum",
+    "description": "Given an n×n matrix, compute the sum of both diagonals (main diagonal + anti-diagonal). If n is odd, the centre element must only be counted once.",
+    "inputFormat": "First line: integer n.\nNext n lines: n space-separated integers each.",
+    "outputFormat": "Single integer — the diagonal sum.",
+    "sampleInput": "3\n1 2 3\n4 5 6\n7 8 9",
+    "sampleOutput": "25",
+    "difficulty": "medium",
+    "tags": ["matrix", "math"],
+    "solution": "import sys\nlines = sys.stdin.read().strip().split('\\n')\nn = int(lines[0])\nmatrix = [list(map(int, lines[i+1].split())) for i in range(n)]\ntotal = 0\nfor i in range(n):\n    total += matrix[i][i]\n    total += matrix[i][n-1-i]\nif n % 2 == 1:\n    total -= matrix[n//2][n//2]\nprint(total)",
+    "testCases": [
+      {
+        "input": "4\n1 2 3 4\n5 6 7 8\n9 10 11 12\n13 14 15 16",
+        "output": "68",
+        "isHidden": true
+      },
+      {
+        "input": "2\n5 1\n3 7",
+        "output": "16",
+        "isHidden": true
+      },
+      {
+        "input": "1\n42",
+        "output": "42",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Anagram Groups",
+    "description": "Given n words, group them by their anagrams. For each group, print all words (sorted alphabetically within the group) on one line separated by spaces. Print the groups in lexicographic order of their first (sorted) word.",
+    "inputFormat": "First line: integer n.\nNext n lines: one word each (lowercase letters only).",
+    "outputFormat": "Each anagram group on its own line, words sorted and space-separated.",
+    "sampleInput": "6\neat\ntea\ntan\nate\nnat\nbat",
+    "sampleOutput": "ate eat tea\nbat\nnat tan",
+    "difficulty": "medium",
+    "tags": ["strings", "sorting", "hash-map"],
+    "solution": "import sys\nfrom collections import defaultdict\nlines = sys.stdin.read().strip().split('\\n')\nn = int(lines[0])\ngroups = defaultdict(list)\nfor i in range(1, n+1):\n    w = lines[i].strip()\n    key = ''.join(sorted(w))\n    groups[key].append(w)\nfor key in sorted(groups):\n    print(' '.join(sorted(groups[key])))",
+    "testCases": [
+      {
+        "input": "4\nabc\ncab\nbca\nxyz",
+        "output": "abc bca cab\nxyz",
+        "isHidden": true
+      },
+      {
+        "input": "3\nlisten\nsilent\nenlist",
+        "output": "enlist listen silent",
+        "isHidden": true
+      },
+      {
+        "input": "2\nhello\nworld",
+        "output": "hello\nworld",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Prime Sieve",
+    "description": "Given an integer n, print all prime numbers from 2 to n (inclusive) in ascending order, one per line. If there are no primes in range, print 'NONE'.",
+    "inputFormat": "Single integer n (2 ≤ n ≤ 10000)",
+    "outputFormat": "Each prime on its own line, in ascending order. 'NONE' if no primes exist.",
+    "sampleInput": "20",
+    "sampleOutput": "2\n3\n5\n7\n11\n13\n17\n19",
+    "difficulty": "medium",
+    "tags": ["math", "sieve", "number-theory"],
+    "solution": "import sys\nn = int(sys.stdin.read().strip())\nif n < 2:\n    print('NONE')\nelse:\n    sieve = [True] * (n+1)\n    sieve[0] = sieve[1] = False\n    for i in range(2, int(n**0.5)+1):\n        if sieve[i]:\n            for j in range(i*i, n+1, i):\n                sieve[j] = False\n    primes = [i for i in range(2, n+1) if sieve[i]]\n    if primes:\n        print('\\n'.join(map(str, primes)))\n    else:\n        print('NONE')",
+    "testCases": [
+      {
+        "input": "50",
+        "output": "2\n3\n5\n7\n11\n13\n17\n19\n23\n29\n31\n37\n41\n43\n47",
+        "isHidden": true
+      },
+      {
+        "input": "2",
+        "output": "2",
+        "isHidden": true
+      },
+      {
+        "input": "100",
+        "output": "2\n3\n5\n7\n11\n13\n17\n19\n23\n29\n31\n37\n41\n43\n47\n53\n59\n61\n67\n71\n73\n79\n83\n89\n97",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Stack Balanced Brackets",
+    "description": "Given a string containing only '(', ')', '{', '}', '[' and ']', determine if the brackets are balanced. Print 'YES' if balanced, 'NO' otherwise.",
+    "inputFormat": "Single line string of bracket characters",
+    "outputFormat": "Print 'YES' or 'NO'",
+    "sampleInput": "{[()]}",
+    "sampleOutput": "YES",
+    "difficulty": "medium",
+    "tags": ["stack", "strings"],
+    "solution": "import sys\ns = sys.stdin.read().strip()\nstack = []\npairs = {')': '(', '}': '{', ']': '['}\nfor c in s:\n    if c in '({[':\n        stack.append(c)\n    elif c in ')}]':\n        if not stack or stack[-1] != pairs[c]:\n            print('NO')\n            exit()\n        stack.pop()\nprint('YES' if not stack else 'NO')",
+    "testCases": [
+      {
+        "input": "([{}])",
+        "output": "YES",
+        "isHidden": true
+      },
+      {
+        "input": "[(])",
+        "output": "NO",
+        "isHidden": true
+      },
+      {
+        "input": "{{{",
+        "output": "NO",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Longest Common Prefix",
+    "description": "Given n strings, find the longest common prefix among all of them. If there is no common prefix, print 'NONE'.",
+    "inputFormat": "First line: integer n.\nNext n lines: one string each.",
+    "outputFormat": "The longest common prefix, or 'NONE' if it doesn't exist.",
+    "sampleInput": "3\nflower\nflow\nflight",
+    "sampleOutput": "fl",
+    "difficulty": "medium",
+    "tags": ["strings", "sorting"],
+    "solution": "import sys\nlines = sys.stdin.read().strip().split('\\n')\nn = int(lines[0])\nwords = [lines[i+1].strip() for i in range(n)]\nif not words:\n    print('NONE')\nelse:\n    prefix = words[0]\n    for w in words[1:]:\n        while not w.startswith(prefix):\n            prefix = prefix[:-1]\n            if not prefix:\n                print('NONE')\n                exit()\n    print(prefix if prefix else 'NONE')",
+    "testCases": [
+      {
+        "input": "3\ndog\nracecar\ncar",
+        "output": "NONE",
+        "isHidden": true
+      },
+      {
+        "input": "2\ninterstate\ninteractive",
+        "output": "inter",
+        "isHidden": true
+      },
+      {
+        "input": "4\nabc\nabc\nabc\nabc",
+        "output": "abc",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Binary Search",
+    "description": "Given a sorted array of n distinct integers and a target value T, find the index of T using binary search. If found, print the 0-based index. If not found, print -1.",
+    "inputFormat": "First line: two integers n and T.\nSecond line: n space-separated integers in strictly ascending order.",
+    "outputFormat": "Single integer — the 0-based index, or -1 if not found.",
+    "sampleInput": "7 14\n1 3 7 14 22 39 55",
+    "sampleOutput": "3",
+    "difficulty": "medium",
+    "tags": ["binary-search", "arrays"],
+    "solution": "import sys\nlines = sys.stdin.read().strip().split('\\n')\nfirst = lines[0].split()\nn, T = int(first[0]), int(first[1])\narr = list(map(int, lines[1].split()))\nlo, hi = 0, n-1\nans = -1\nwhile lo <= hi:\n    mid = (lo + hi) // 2\n    if arr[mid] == T:\n        ans = mid\n        break\n    elif arr[mid] < T:\n        lo = mid + 1\n    else:\n        hi = mid - 1\nprint(ans)",
+    "testCases": [
+      {
+        "input": "5 99\n10 20 30 40 50",
+        "output": "-1",
+        "isHidden": true
+      },
+      {
+        "input": "6 1\n1 3 5 7 9 11",
+        "output": "0",
+        "isHidden": true
+      },
+      {
+        "input": "6 11\n1 3 5 7 9 11",
+        "output": "5",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Merge Sorted Arrays",
+    "description": "Given two sorted arrays of integers, merge them into one sorted array and print it.",
+    "inputFormat": "First line: two integers n and m (sizes of the two arrays).\nSecond line: n sorted integers.\nThird line: m sorted integers.",
+    "outputFormat": "Single line of (n+m) sorted integers separated by spaces.",
+    "sampleInput": "3 4\n1 5 9\n2 4 6 8",
+    "sampleOutput": "1 2 4 5 6 8 9",
+    "difficulty": "medium",
+    "tags": ["sorting", "arrays", "merge"],
+    "solution": "import sys\nlines = sys.stdin.read().strip().split('\\n')\nn, m = map(int, lines[0].split())\nA = list(map(int, lines[1].split()))\nB = list(map(int, lines[2].split()))\nmerged = sorted(A + B)\nprint(' '.join(map(str, merged)))",
+    "testCases": [
+      {
+        "input": "4 3\n1 3 5 7\n2 4 6",
+        "output": "1 2 3 4 5 6 7",
+        "isHidden": true
+      },
+      {
+        "input": "2 2\n-5 -1\n0 3",
+        "output": "-5 -1 0 3",
+        "isHidden": true
+      },
+      {
+        "input": "1 1\n100\n200",
+        "output": "100 200",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Number Spiral",
+    "description": "Given n, print an n×n matrix filled with integers 1 to n² in clockwise spiral order starting from the top-left corner.",
+    "inputFormat": "Single integer n (1 ≤ n ≤ 10)",
+    "outputFormat": "n lines each containing n space-separated integers forming the spiral matrix.",
+    "sampleInput": "3",
+    "sampleOutput": "1 2 3\n8 9 4\n7 6 5",
+    "difficulty": "medium",
+    "tags": ["matrix", "simulation"],
+    "solution": "import sys\nn = int(sys.stdin.read().strip())\nmatrix = [[0]*n for _ in range(n)]\ntop, bottom, left, right = 0, n-1, 0, n-1\nnum = 1\nwhile top <= bottom and left <= right:\n    for i in range(left, right+1):\n        matrix[top][i] = num; num += 1\n    top += 1\n    for i in range(top, bottom+1):\n        matrix[i][right] = num; num += 1\n    right -= 1\n    for i in range(right, left-1, -1):\n        matrix[bottom][i] = num; num += 1\n    bottom -= 1\n    for i in range(bottom, top-1, -1):\n        matrix[i][left] = num; num += 1\n    left += 1\nfor row in matrix:\n    print(' '.join(map(str, row)))",
+    "testCases": [
+      {
+        "input": "4",
+        "output": "1 2 3 4\n12 13 14 5\n11 16 15 6\n10 9 8 7",
+        "isHidden": true
+      },
+      {
+        "input": "1",
+        "output": "1",
+        "isHidden": true
+      },
+      {
+        "input": "2",
+        "output": "1 2\n4 3",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Longest Increasing Subsequence",
+    "description": "Given an array of n integers, find the length of the longest strictly increasing subsequence (LIS).",
+    "inputFormat": "First line: integer n.\nSecond line: n space-separated integers.",
+    "outputFormat": "Single integer — the length of the LIS.",
+    "sampleInput": "8\n10 9 2 5 3 7 101 18",
+    "sampleOutput": "4",
+    "difficulty": "hard",
+    "tags": ["dynamic-programming", "arrays"],
+    "solution": "import sys\nlines = sys.stdin.read().strip().split('\\n')\nn = int(lines[0])\narr = list(map(int, lines[1].split()))\nimport bisect\ntails = []\nfor x in arr:\n    pos = bisect.bisect_left(tails, x)\n    if pos == len(tails):\n        tails.append(x)\n    else:\n        tails[pos] = x\nprint(len(tails))",
+    "testCases": [
+      {
+        "input": "6\n3 10 2 1 20 5",
+        "output": "3",
+        "isHidden": true
+      },
+      {
+        "input": "5\n50 3 10 7 40",
+        "output": "4",
+        "isHidden": true
+      },
+      {
+        "input": "4\n5 4 3 2",
+        "output": "1",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Coin Change",
+    "description": "Given a list of coin denominations and a target amount, find the minimum number of coins needed to make the exact amount. If it's not possible, print -1.",
+    "inputFormat": "First line: two integers n (number of denominations) and T (target amount).\nSecond line: n space-separated integer denominations.",
+    "outputFormat": "Single integer — minimum coins needed, or -1 if impossible.",
+    "sampleInput": "3 11\n1 5 6",
+    "sampleOutput": "2",
+    "difficulty": "hard",
+    "tags": ["dynamic-programming", "greedy"],
+    "solution": "import sys\nlines = sys.stdin.read().strip().split('\\n')\nn, T = map(int, lines[0].split())\ncoins = list(map(int, lines[1].split()))\ndp = [float('inf')] * (T+1)\ndp[0] = 0\nfor amount in range(1, T+1):\n    for c in coins:\n        if c <= amount and dp[amount-c] + 1 < dp[amount]:\n            dp[amount] = dp[amount-c] + 1\nprint(dp[T] if dp[T] != float('inf') else -1)",
+    "testCases": [
+      {
+        "input": "3 7\n2 3 4",
+        "output": "2",
+        "isHidden": true
+      },
+      {
+        "input": "2 3\n2 4",
+        "output": "-1",
+        "isHidden": true
+      },
+      {
+        "input": "4 100\n1 5 10 25",
+        "output": "4",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Word Ladder Length",
+    "description": "Given a start word and end word, and a dictionary of words, find the length of the shortest transformation sequence from start to end, where each step changes exactly one letter and every intermediate word must be in the dictionary. If no path exists, print 0. The start word is not required to be in the dictionary.",
+    "inputFormat": "First line: start word.\nSecond line: end word.\nThird line: integer n.\nNext n lines: one dictionary word each (all words same length, lowercase).",
+    "outputFormat": "Single integer — length of shortest sequence (including start and end), or 0 if impossible.",
+    "sampleInput": "hit\ncog\n6\nhot\ndot\ndog\nlot\nlog\ncog",
+    "sampleOutput": "5",
+    "difficulty": "hard",
+    "tags": ["bfs", "graph", "strings"],
+    "solution": "import sys\nfrom collections import deque\nlines = sys.stdin.read().strip().split('\\n')\nstart = lines[0].strip()\nend = lines[1].strip()\nn = int(lines[2].strip())\nword_set = set(lines[i+3].strip() for i in range(n))\nif end not in word_set:\n    print(0)\n    exit()\nqueue = deque([(start, 1)])\nvisited = {start}\nwhile queue:\n    word, length = queue.popleft()\n    for i in range(len(word)):\n        for c in 'abcdefghijklmnopqrstuvwxyz':\n            new_word = word[:i] + c + word[i+1:]\n            if new_word == end:\n                print(length + 1)\n                exit()\n            if new_word in word_set and new_word not in visited:\n                visited.add(new_word)\n                queue.append((new_word, length + 1))\nprint(0)",
+    "testCases": [
+      {
+        "input": "hit\ncog\n4\nhot\ndot\ndog\ncog",
+        "output": "5",
+        "isHidden": true
+      },
+      {
+        "input": "abc\nxyz\n3\naac\nbbc\nxyz",
+        "output": "0",
+        "isHidden": true
+      },
+      {
+        "input": "cat\nsat\n2\nsat\nbat",
+        "output": "2",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Minimum Path Sum Grid",
+    "description": "Given an m×n grid of non-negative integers, find the minimum path sum from the top-left cell to the bottom-right cell. You may only move right or down at each step.",
+    "inputFormat": "First line: two integers m and n (rows and columns).\nNext m lines: n space-separated non-negative integers each.",
+    "outputFormat": "Single integer — the minimum path sum.",
+    "sampleInput": "3 3\n1 3 1\n1 5 1\n4 2 1",
+    "sampleOutput": "7",
+    "difficulty": "hard",
+    "tags": ["dynamic-programming", "matrix", "grid"],
+    "solution": "import sys\nlines = sys.stdin.read().strip().split('\\n')\nm, n = map(int, lines[0].split())\ngrid = [list(map(int, lines[i+1].split())) for i in range(m)]\nfor i in range(1, m):\n    grid[i][0] += grid[i-1][0]\nfor j in range(1, n):\n    grid[0][j] += grid[0][j-1]\nfor i in range(1, m):\n    for j in range(1, n):\n        grid[i][j] += min(grid[i-1][j], grid[i][j-1])\nprint(grid[m-1][n-1])",
+    "testCases": [
+      {
+        "input": "2 3\n1 2 3\n4 5 6",
+        "output": "12",
+        "isHidden": true
+      },
+      {
+        "input": "1 4\n5 1 1 1",
+        "output": "8",
+        "isHidden": true
+      },
+      {
+        "input": "4 4\n1 2 1 1\n3 1 1 9\n1 2 1 1\n1 1 1 1",
+        "output": "8",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Largest Rectangle in Histogram",
+    "description": "Given an array representing heights of bars in a histogram (each bar has width 1), find the area of the largest rectangle that can be formed within the bars.",
+    "inputFormat": "First line: integer n.\nSecond line: n space-separated non-negative integers (bar heights).",
+    "outputFormat": "Single integer — the maximum rectangle area.",
+    "sampleInput": "7\n2 1 5 6 2 3 1",
+    "sampleOutput": "10",
+    "difficulty": "hard",
+    "tags": ["stack", "arrays", "monotone-stack"],
+    "solution": "import sys\nlines = sys.stdin.read().strip().split('\\n')\nn = int(lines[0])\nheights = list(map(int, lines[1].split()))\nheights.append(0)\nstack = []\nmax_area = 0\nfor i, h in enumerate(heights):\n    start = i\n    while stack and stack[-1][1] > h:\n        idx, ht = stack.pop()\n        max_area = max(max_area, ht * (i - idx))\n        start = idx\n    stack.append((start, h))\nprint(max_area)",
+    "testCases": [
+      {
+        "input": "6\n3 3 3 3 3 3",
+        "output": "18",
+        "isHidden": true
+      },
+      {
+        "input": "5\n2 4 2 1 10",
+        "output": "10",
+        "isHidden": true
+      },
+      {
+        "input": "4\n6 7 5 2",
+        "output": "15",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Number of Islands",
+    "description": "Given a grid of '1's (land) and '0's (water), count the number of islands. An island is surrounded by water and is formed by connecting adjacent land cells horizontally or vertically.",
+    "inputFormat": "First line: two integers rows and cols.\nNext rows lines: cols space-separated characters ('1' or '0') each.",
+    "outputFormat": "Single integer — number of islands.",
+    "sampleInput": "4 5\n1 1 1 1 0\n1 1 0 1 0\n1 1 0 0 0\n0 0 0 0 0",
+    "sampleOutput": "1",
+    "difficulty": "hard",
+    "tags": ["bfs", "dfs", "graph", "matrix"],
+    "solution": "import sys\nfrom collections import deque\nlines = sys.stdin.read().strip().split('\\n')\nrows, cols = map(int, lines[0].split())\ngrid = [lines[i+1].split() for i in range(rows)]\nvisited = [[False]*cols for _ in range(rows)]\ncount = 0\nfor r in range(rows):\n    for c in range(cols):\n        if grid[r][c] == '1' and not visited[r][c]:\n            count += 1\n            q = deque([(r,c)])\n            visited[r][c] = True\n            while q:\n                cr, cc = q.popleft()\n                for dr, dc in [(-1,0),(1,0),(0,-1),(0,1)]:\n                    nr, nc = cr+dr, cc+dc\n                    if 0<=nr<rows and 0<=nc<cols and grid[nr][nc]=='1' and not visited[nr][nc]:\n                        visited[nr][nc] = True\n                        q.append((nr,nc))\nprint(count)",
+    "testCases": [
+      {
+        "input": "3 3\n1 1 0\n0 1 0\n0 0 1",
+        "output": "2",
+        "isHidden": true
+      },
+      {
+        "input": "4 4\n1 0 1 0\n0 1 0 1\n1 0 1 0\n0 1 0 1",
+        "output": "8",
+        "isHidden": true
+      },
+      {
+        "input": "2 2\n0 0\n0 0",
+        "output": "0",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Longest Palindromic Substring",
+    "description": "Given a string s, find the length of its longest palindromic substring.",
+    "inputFormat": "Single line string s (1 ≤ |s| ≤ 1000, lowercase letters only)",
+    "outputFormat": "Single integer — length of the longest palindromic substring.",
+    "sampleInput": "babad",
+    "sampleOutput": "3",
+    "difficulty": "hard",
+    "tags": ["dynamic-programming", "strings", "expand-around-centre"],
+    "solution": "import sys\ns = sys.stdin.read().strip()\nn = len(s)\nbest = 1\ndef expand(l, r):\n    while l >= 0 and r < n and s[l] == s[r]:\n        l -= 1; r += 1\n    return r - l - 1\nfor i in range(n):\n    best = max(best, expand(i, i), expand(i, i+1))\nprint(best)",
+    "testCases": [
+      {
+        "input": "cbbd",
+        "output": "2",
+        "isHidden": true
+      },
+      {
+        "input": "raceacar",
+        "output": "7",
+        "isHidden": true
+      },
+      {
+        "input": "abcdef",
+        "output": "1",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Subset Sum Count",
+    "description": "Given an array of n positive integers and a target value T, count the number of distinct non-empty subsets whose elements sum exactly to T.",
+    "inputFormat": "First line: two integers n and T.\nSecond line: n space-separated positive integers.",
+    "outputFormat": "Single integer — the total count of valid subsets.",
+    "sampleInput": "4 5\n1 2 3 4",
+    "sampleOutput": "3",
+    "difficulty": "hard",
+    "tags": ["dynamic-programming", "recursion", "subsets"],
+    "solution": "import sys\nlines = sys.stdin.read().strip().split('\\n')\nn, T = map(int, lines[0].split())\narr = list(map(int, lines[1].split()))\ndp = [0] * (T+1)\ndp[0] = 1\nfor x in arr:\n    for s in range(T, x-1, -1):\n        dp[s] += dp[s-x]\nprint(dp[T])",
+    "testCases": [
+      {
+        "input": "3 6\n2 3 4",
+        "output": "2",
+        "isHidden": true
+      },
+      {
+        "input": "5 10\n2 3 5 6 8",
+        "output": "3",
+        "isHidden": true
+      },
+      {
+        "input": "3 100\n1 2 3",
+        "output": "0",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Topological Sort",
+    "description": "Given a directed acyclic graph (DAG) with n nodes (0-indexed) and m directed edges, print a valid topological ordering of the nodes. If the graph has a cycle, print 'CYCLE'.",
+    "inputFormat": "First line: two integers n and m.\nNext m lines: two integers u v representing a directed edge from u to v.",
+    "outputFormat": "Space-separated node indices in topological order, or 'CYCLE' if one exists.",
+    "sampleInput": "6 6\n5 2\n5 0\n4 0\n4 1\n2 3\n3 1",
+    "sampleOutput": "4 5 0 2 3 1",
+    "difficulty": "hard",
+    "tags": ["graph", "topological-sort", "bfs", "kahn"],
+    "solution": "import sys\nfrom collections import deque\nlines = sys.stdin.read().strip().split('\\n')\nn, m = map(int, lines[0].split())\nadj = [[] for _ in range(n)]\nin_deg = [0] * n\nfor i in range(1, m+1):\n    u, v = map(int, lines[i].split())\n    adj[u].append(v)\n    in_deg[v] += 1\nq = deque(i for i in range(n) if in_deg[i] == 0)\nresult = []\nwhile q:\n    node = q.popleft()\n    result.append(node)\n    for nb in adj[node]:\n        in_deg[nb] -= 1\n        if in_deg[nb] == 0:\n            q.append(nb)\nif len(result) != n:\n    print('CYCLE')\nelse:\n    print(' '.join(map(str, result)))",
+    "testCases": [
+      {
+        "input": "4 4\n0 1\n1 2\n2 3\n0 3",
+        "output": "0 1 2 3",
+        "isHidden": true
+      },
+      {
+        "input": "3 3\n0 1\n1 2\n2 0",
+        "output": "CYCLE",
+        "isHidden": true
+      },
+      {
+        "input": "5 4\n0 2\n1 3\n2 4\n3 4",
+        "output": "0 1 2 3 4",
+        "isHidden": true
+      }
+    ]
+  },
+  {
+    "title": "Trapping Rain Water",
+    "description": "Given n non-negative integers representing the heights of bars in an elevation map (each bar has width 1), compute how much rain water can be trapped between the bars.",
+    "inputFormat": "First line: integer n.\nSecond line: n space-separated non-negative integers (bar heights).",
+    "outputFormat": "Single integer — total units of water trapped.",
+    "sampleInput": "12\n0 1 0 2 1 0 1 3 2 1 2 1",
+    "sampleOutput": "6",
+    "difficulty": "hard",
+    "tags": ["two-pointers", "arrays", "stack"],
+    "solution": "import sys\nlines = sys.stdin.read().strip().split('\\n')\nn = int(lines[0])\nheight = list(map(int, lines[1].split()))\nleft, right = 0, n - 1\nleft_max = right_max = water = 0\nwhile left < right:\n    if height[left] <= height[right]:\n        if height[left] >= left_max:\n            left_max = height[left]\n        else:\n            water += left_max - height[left]\n        left += 1\n    else:\n        if height[right] >= right_max:\n            right_max = height[right]\n        else:\n            water += right_max - height[right]\n        right -= 1\nprint(water)",
+    "testCases": [
+      {
+        "input": "6\n4 2 0 3 2 5",
+        "output": "9",
+        "isHidden": true
+      },
+      {
+        "input": "5\n3 0 2 0 4",
+        "output": "7",
+        "isHidden": true
+      },
+      {
+        "input": "4\n1 1 1 1",
+        "output": "0",
+        "isHidden": true
+      }
+    ]
   }
 ]
