@@ -27,8 +27,8 @@ const fmtTime = (iso) =>
 // Suggested starter prompts (randomised each session)
 const STARTERS = [
   { icon: <Lightbulb size={16} />, label: "Give me a hint for my last problem" },
-  { icon: <Target size={16} />,    label: "What are my weak topics?" },
-  { icon: <BookOpen size={16} />,  label: "Explain dynamic programming" },
+  { icon: <Target size={16} />, label: "What are my weak topics?" },
+  { icon: <BookOpen size={16} />, label: "Explain dynamic programming" },
   { icon: <BarChart2 size={16} />, label: "How can I improve my rating?" },
 ]
 
@@ -51,13 +51,12 @@ const Bubble = ({ msg }) => {
       )}
 
       <div className={`max-w-[78%] flex flex-col ${isUser ? "items-end" : "items-start"}`}>
-        <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
-          isUser
+        <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${isUser
             ? "bg-primary text-dark-900 font-medium rounded-br-sm"
             : msg.isError
               ? "bg-red-500/10 border border-red-500/30 text-red-300 rounded-bl-sm"
               : "bg-dark-700/80 border border-dark-600/60 text-gray-100 rounded-bl-sm"
-        }`}>
+          }`}>
           {msg.content}
         </div>
         <span className="text-[10px] text-gray-600 mt-1 px-1">{fmtTime(msg.ts)}</span>
@@ -104,14 +103,12 @@ const AITutor = () => {
       const outcome = matchContext.result === "win" ? "won ✅" : matchContext.result === "draw" ? "drew 🤝" : "lost ❌"
       return createMsg(
         "assistant",
-        `Hey ${user?.username || "there"}! I've reviewed your match on **${matchContext.questionTitle}** where you ${outcome}.\n\n${
-          matchContext.report
-            ? matchContext.report + "\n\n"
-            : ""
-        }${
-          matchContext.weakTopics?.length
-            ? `Topics to focus on: ${matchContext.weakTopics.join(", ")}.\n\n`
-            : ""
+        `Hey ${user?.username || "there"}! I've reviewed your match on **${matchContext.questionTitle}** where you ${outcome}.\n\n${matchContext.report
+          ? matchContext.report + "\n\n"
+          : ""
+        }${matchContext.weakTopics?.length
+          ? `Topics to focus on: ${matchContext.weakTopics.join(", ")}.\n\n`
+          : ""
         }What would you like help with? I can explain the problem, suggest approaches, or help you practice similar challenges.`
       )
     }
@@ -122,14 +119,14 @@ const AITutor = () => {
   }
 
   const [messages, setMessages] = useState(() => [buildWelcome()])
-  const [input, setInput]       = useState("")
-  const [sending, setSending]   = useState(false)
-  const [error, setError]       = useState("")
+  const [input, setInput] = useState("")
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState("")
   const [sessions, setSessions] = useState([{ id: "current", label: "Current Session", active: true }])
-  const endRef     = useRef(null)
+  const endRef = useRef(null)
   const textareaRef = useRef(null)
-  const inputRef    = useRef(input)
-  inputRef.current  = input
+  const inputRef = useRef(input)
+  inputRef.current = input
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -218,9 +215,8 @@ const AITutor = () => {
         {/* Session list */}
         <div className="flex-1 space-y-1 overflow-y-auto">
           {sessions.map(s => (
-            <button key={s.id} className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-medium transition truncate ${
-              s.active ? "bg-dark-700/80 text-gray-100 border border-dark-600" : "text-gray-500 hover:bg-dark-700/40 hover:text-gray-300"
-            }`}>
+            <button key={s.id} className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-medium transition truncate ${s.active ? "bg-dark-700/80 text-gray-100 border border-dark-600" : "text-gray-500 hover:bg-dark-700/40 hover:text-gray-300"
+              }`}>
               {s.label}
             </button>
           ))}
@@ -250,7 +246,6 @@ const AITutor = () => {
             </div>
             <div>
               <p className="text-sm font-bold text-white">CodeQuest AI Coach</p>
-              <p className="text-[10px] text-gray-500">Powered by LLaMA 3.3 · Groq</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

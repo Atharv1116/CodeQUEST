@@ -63,11 +63,11 @@ const ActionCard = ({ icon: Icon, title, subtitle, tag, tagColor, accent, onClic
 // ─── Main component ───────────────────────────────────────────────
 const BattleRoyaleMode = () => {
   const navigate = useNavigate();
-  const socket   = useSocket();
+  const socket = useSocket();
   const { user } = useAuth();
   const [showJoinModal, setShowJoinModal] = useState(false);
-  const [creating, setCreating]           = useState(false);
-  const [view, setView]                   = useState('main'); // 'main' | 'custom'
+  const [creating, setCreating] = useState(false);
+  const [view, setView] = useState('main'); // 'main' | 'custom'
 
   // ── All logic — UNCHANGED ──────────────────────────────────
   const handleEnterQueue = () => {
@@ -191,7 +191,7 @@ const BattleRoyaleMode = () => {
             </span>
           </h1>
           <p className="text-gray-400 text-lg max-w-md mx-auto leading-relaxed">
-            Compete with up to 100 players in an epic coding battle.
+            Compete with up to 50 players in an epic coding battle.
             Find a match instantly or fight with your crew.
           </p>
         </motion.div>
@@ -228,7 +228,7 @@ const BattleRoyaleMode = () => {
           transition={{ delay: 0.4 }}
           className="flex flex-wrap items-center justify-center gap-6 text-xs text-gray-600 font-semibold uppercase tracking-widest mb-8">
           {[
-            { dot: '#22c55e', label: 'Up to 100 players' },
+            { dot: '#22c55e', label: 'Up to 50 players' },
             { dot: '#a855f7', label: '3 elimination rounds' },
             { dot: '#60a5fa', label: 'ELO rating' },
           ].map(s => (

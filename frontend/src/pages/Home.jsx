@@ -180,10 +180,10 @@ const Home = () => {
 
           {/* Stats strip */}
           <div className="flex flex-wrap items-center justify-center gap-4">
-            <StatPill value="10K+" label="Matches Played" delay={0.55} />
-            <StatPill value="3 Modes"  label="Game Types"    delay={0.62} />
-            <StatPill value="AI Coach" label="Post-Match"    delay={0.69} />
-            <StatPill value="ELO"      label="Rank System"   delay={0.76} />
+            <StatPill value="100+" label="Matches Played" delay={0.55} />
+            <StatPill value="3 Modes" label="Game Types" delay={0.62} />
+            <StatPill value="AI Coach" label="Post-Match" delay={0.69} />
+            <StatPill value="ELO" label="Rank System" delay={0.76} />
           </div>
         </motion.div>
       </section>
@@ -256,7 +256,7 @@ const Home = () => {
         <div className="grid md:grid-cols-3 gap-6">
           {[
             { step: "01", title: "Create Account", body: "Sign up in seconds and get your starter rating.", icon: <Code2 size={22} className="text-primary" /> },
-            { step: "02", title: "Find a Match",   body: "Jump into 1v1, 2v2, or Battle Royale instantly.", icon: <Zap size={22} className="text-purple-400" /> },
+            { step: "02", title: "Find a Match", body: "Jump into 1v1, 2v2, or Battle Royale instantly.", icon: <Zap size={22} className="text-purple-400" /> },
             { step: "03", title: "Climb the Ranks", body: "Win matches, earn XP, and claim your top spot.", icon: <Trophy size={22} className="text-yellow-400" /> },
           ].map((s, i) => (
             <motion.div key={s.step}
