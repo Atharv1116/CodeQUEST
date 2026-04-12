@@ -124,6 +124,8 @@ const Battle = () => {
   const [teammates, setTeammates] = useState([]); // socket IDs of teammates
   const [opponents, setOpponents] = useState([]); // socket IDs of opponents (hidden)
   const [teammateNames, setTeammateNames] = useState([]); // usernames of teammates
+  // 2v2 co-op dual-solve leaderboard: [{ socketId, userId, team, solveTimeMs, attempts }]
+  const [teamSolves, setTeamSolves] = useState([]);
   const chatEndRef = useRef(null);
   const timerHandleRef = useRef(null);
   const timerExpiredRef = useRef(false);
@@ -271,6 +273,16 @@ const Battle = () => {
       }
     };
 
+    // 2v2 co-op: teammate/opponent solved — update live leaderboard
+    const handleTeamMemberSolved = ({ team, socketId, userId, solveTimeMs, attempts }) => {
+      console.log('[Battle] team-member-solved:', team, userId, solveTimeMs);
+      setTeamSolves(prev => {
+        const exists = prev.find(s => s.userId === userId || s.socketId === socketId);
+        if (exists) return prev; // idempotent
+        return [...prev, { socketId, userId, team, solveTimeMs, attempts, solvedAt: Date.now() }];
+      });
+    };
+
     // Register with named refs so .off only removes this exact handler
     socket.on('match-found', handleMatchFound);
     socket.on('timer-tick', handleTimerTick);
@@ -279,6 +291,7 @@ const Battle = () => {
     socket.on('match-forfeited', handleMatchForfeited);
     socket.on('rating-update', handleRatingUpdate);
     socket.on('room-state', handleRoomState);
+    socket.on('team-member-solved', handleTeamMemberSolved);
 
     return () => {
       socket.off('match-found', handleMatchFound);
@@ -288,6 +301,7 @@ const Battle = () => {
       socket.off('match-forfeited', handleMatchForfeited);
       socket.off('rating-update', handleRatingUpdate);
       socket.off('room-state', handleRoomState);
+      socket.off('team-member-solved', handleTeamMemberSolved);
     };
     // Only re-run when socket itself changes — user/myTeam/matchType read via refs
   }, [socket, roomId]);
@@ -1054,35 +1068,88 @@ const Battle = () => {
 
           {/* Question Content - Scrollable */}
           <div className="flex-1 overflow-y-auto p-4 bg-dark-800">
-            {/* 2v2 Team Matchup Display */}
+            {/* 2v2 Live Solve Leaderboard — updates in real-time */}
             {matchType === '2v2' && myTeam && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mb-4 p-3 bg-dark-700/50 border border-dark-600 rounded-lg"
+                className="mb-4 p-3 bg-dark-700/50 border border-dark-600 rounded-xl"
               >
-                <div className="flex items-center justify-center gap-4 text-sm">
-                  <div className="flex flex-col items-center">
-                    <div className={`px-3 py-1 rounded font-semibold ${myTeam === 'blue' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>
-                      Team {myTeam === 'blue' ? 'Blue' : 'Red'}
+                <p className="text-xs uppercase tracking-widest font-bold text-gray-500 mb-3 flex items-center gap-2">
+                  <Trophy size={12} className="text-primary" /> Live 2v2 Leaderboard
+                </p>
+                {/* Blue Team */}
+                <div className="mb-2">
+                  <p className="text-xs font-bold text-blue-400 mb-1">🔵 Team Blue</p>
+                  {[...teammates.filter(sid => myTeam === 'blue'), ...(myTeam === 'blue' ? [] : [])].length === 0 && myTeam === 'blue' ? (
+                    <div className="flex items-center justify-between text-xs py-1 px-2 bg-dark-800 rounded">
+                      <span className="text-primary font-semibold">You</span>
+                      {teamSolves.find(s => s.team === 'blue' && (s.userId === (user?.id?.toString() || user?._id?.toString()))) ? (
+                        <span className="text-green-400 font-bold">✅ {Math.round((teamSolves.find(s => s.team === 'blue' && (s.userId === (user?.id?.toString() || user?._id?.toString())))?.solveTimeMs || 0) / 1000)}s</span>
+                      ) : <span className="text-yellow-400 animate-pulse font-bold">⏳ Solving...</span>}
                     </div>
-                    <div className="mt-2 space-y-1 text-xs text-gray-300">
-                      <div className="text-primary">You</div>
-                      {teammateNames.map((t, idx) => (
-                        <div key={idx}>{t.username}</div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="text-gray-500 font-bold">VS</div>
-                  <div className="flex flex-col items-center">
-                    <div className={`px-3 py-1 rounded font-semibold ${myTeam === 'blue' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                      Team {myTeam === 'blue' ? 'Red' : 'Blue'}
-                    </div>
-                    <div className="mt-2 space-y-1 text-xs text-gray-500">
-                      <div>Hidden</div>
-                      <div>Hidden</div>
-                    </div>
-                  </div>
+                  ) : null}
+                  {teammates.filter(() => myTeam === 'blue').map((sid, i) => {
+                    const tName = teammateNames.find(t => t.socketId === sid)?.username || 'Teammate';
+                    const solve = teamSolves.find(s => s.socketId === sid);
+                    return (
+                      <div key={sid} className="flex items-center justify-between text-xs py-1 px-2 bg-dark-800 rounded mt-1">
+                        <span className="text-gray-300">{tName}</span>
+                        {solve ? <span className="text-green-400 font-bold">✅ {Math.round((solve.solveTimeMs || 0)/1000)}s</span>
+                          : <span className="text-gray-500 animate-pulse">⏳</span>}
+                      </div>
+                    );
+                  })}
+                  {/* current user if on blue */}
+                  {myTeam === 'blue' && (() => {
+                    const myUid = user?.id?.toString() || user?._id?.toString();
+                    const mySolve = teamSolves.find(s => s.team === 'blue' && s.userId === myUid);
+                    return (
+                      <div className="flex items-center justify-between text-xs py-1 px-2 bg-dark-800 rounded mt-1 border border-primary/20">
+                        <span className="text-primary font-semibold">You</span>
+                        {mySolve ? <span className="text-green-400 font-bold">✅ {Math.round((mySolve.solveTimeMs||0)/1000)}s</span>
+                          : <span className="text-yellow-400 animate-pulse">⏳ Solving...</span>}
+                      </div>
+                    );
+                  })()}
+                </div>
+                {/* Red Team */}
+                <div>
+                  <p className="text-xs font-bold text-red-400 mb-1">🔴 Team Red</p>
+                  {myTeam === 'red' && (() => {
+                    const myUid = user?.id?.toString() || user?._id?.toString();
+                    const mySolve = teamSolves.find(s => s.team === 'red' && s.userId === myUid);
+                    return (
+                      <div className="flex items-center justify-between text-xs py-1 px-2 bg-dark-800 rounded mb-1 border border-red-500/20">
+                        <span className="text-red-300 font-semibold">You</span>
+                        {mySolve ? <span className="text-green-400 font-bold">✅ {Math.round((mySolve.solveTimeMs||0)/1000)}s</span>
+                          : <span className="text-yellow-400 animate-pulse">⏳ Solving...</span>}
+                      </div>
+                    );
+                  })()}
+                  {teammates.filter(() => myTeam === 'red').map((sid) => {
+                    const tName = teammateNames.find(t => t.socketId === sid)?.username || 'Teammate';
+                    const solve = teamSolves.find(s => s.socketId === sid);
+                    return (
+                      <div key={sid} className="flex items-center justify-between text-xs py-1 px-2 bg-dark-800 rounded mt-1">
+                        <span className="text-gray-300">{tName}</span>
+                        {solve ? <span className="text-green-400 font-bold">✅ {Math.round((solve.solveTimeMs||0)/1000)}s</span>
+                          : <span className="text-gray-500 animate-pulse">⏳</span>}
+                      </div>
+                    );
+                  })}
+                  {/* Opponents (opposite team) shown as hidden */}
+                  {(opponents || []).map((sid) => {
+                    const solve = teamSolves.find(s => s.socketId === sid);
+                    const oppTeam = myTeam === 'blue' ? 'red' : 'blue';
+                    return (
+                      <div key={sid} className="flex items-center justify-between text-xs py-1 px-2 bg-dark-800 rounded mt-1">
+                        <span className="text-gray-500">Opponent</span>
+                        {solve ? <span className="text-green-400 font-bold">✅ {Math.round((solve.solveTimeMs||0)/1000)}s</span>
+                          : <span className="text-gray-600">⏳</span>}
+                      </div>
+                    );
+                  })}
                 </div>
               </motion.div>
             )}

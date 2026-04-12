@@ -530,24 +530,50 @@ io.on('connection', (socket) => {
 
 
   // -------- join-room: re-join socket to an existing match room --------
-  // Battle.jsx emits this on mount. Without this handler the socket is NOT in
-  // the Socket.IO room and io.to(roomId).emit() delivers to nobody.
   socket.on('join-room', (roomId) => {
     if (!roomId) return;
     socket.join(roomId);
     console.log(`[Server] Socket ${socket.id} joined room ${roomId}`);
 
-    // If there is active match state, send it so the client can recover
     const state = roomState.get(roomId);
     if (state) {
-      // 1. UPDATE STALE SOCKET IDs in state.players
-      // so if a user reconnects, functionality like 'leave-match' referencing socket.id still works
       const userId = playerSessions.get(socket.id);
+
+      // 1. Update stale socket IDs — crucial after reconnection
       if (userId && state.playerIds) {
         const pIndex = state.playerIds.findIndex(id => id && id.toString() === userId.toString());
         if (pIndex !== -1 && state.players[pIndex] !== socket.id) {
-          console.log(`[Server] Updating stale socket ID for user ${userId} to ${socket.id}`);
+          const oldSocketId = state.players[pIndex];
+          console.log(`[Server] Updating stale socket ${oldSocketId} → ${socket.id} for user ${userId}`);
           state.players[pIndex] = socket.id;
+
+          // Update 2v2 team socket lists too
+          if (state.teams) {
+            for (const team of ['red', 'blue']) {
+              const idx = (state.teams[team] || []).indexOf(oldSocketId);
+              if (idx !== -1) state.teams[team][idx] = socket.id;
+            }
+          }
+          // Update teamSolves keys (2v2 dual-solve tracking)
+          if (state.teamSolves) {
+            for (const team of ['red', 'blue']) {
+              if (state.teamSolves[team]?.[oldSocketId]) {
+                state.teamSolves[team][socket.id] = state.teamSolves[team][oldSocketId];
+                delete state.teamSolves[team][oldSocketId];
+              }
+            }
+          }
+
+          // 2. CANCEL pending forfeit timer if player reconnected in time
+          if (state.disconnectTimers?.[oldSocketId]) {
+            clearTimeout(state.disconnectTimers[oldSocketId]);
+            delete state.disconnectTimers[oldSocketId];
+            console.log(`[Server] Forfeit timer cancelled — ${userId} reconnected`);
+            io.to(roomId).emit('receive-message', {
+              user: 'System', message: '✅ Player reconnected!', type: 'system'
+            });
+          }
+          roomState.set(roomId, state);
         }
       }
     }
@@ -1340,11 +1366,73 @@ io.on('connection', (socket) => {
       // --- CUSTOM BATTLE ROYALE: team-based, match stays open ---
       if (state.type === 'custom-battle-royale') {
         socket.emit('evaluation-result', { ok: true, correct: true, details, attempt: attemptNum });
-
-        // Route to BR engine (handles dedup, leaderboard update, broadcast)
         const userId = playerSessions.get(socket.id);
         brEngine.handleBRSubmission(roomId, socket.id, userId, true, submitTimeMs);
-        // Do NOT set state.finished or emit match-locked — all players keep playing
+        return;
+      }
+
+      // ─── 2v2 CO-OP DUAL-SOLVE: match only ends when BOTH teammates solve ───
+      // We handle this BEFORE setting state.finished so the match stays alive
+      // until the whole team has completed the problem.
+      if (state.type === '2v2') {
+        const teams = state.teams || {};
+        const isRed = teams.red?.includes(socket.id);
+        const teamName = isRed ? 'red' : 'blue';
+        const myTeamSockets = teams[teamName] || [];
+
+        // Initialize per-team solve tracking
+        if (!state.teamSolves) state.teamSolves = { red: {}, blue: {} };
+        if (!state.teamSolves[teamName]) state.teamSolves[teamName] = {};
+
+        // Idempotency guard — player already registered their solve
+        if (state.teamSolves[teamName][socket.id]) {
+          socket.emit('evaluation-result', {
+            ok: true, correct: true, details,
+            message: '✅ Already solved! Waiting for your teammate...',
+            attempt: attemptNum
+          });
+          return;
+        }
+
+        // Register this player's solve
+        const solvingUserId = playerSessions.get(socket.id);
+        state.teamSolves[teamName][socket.id] = { solveTimeMs: submitTimeMs, attempts: attemptNum, userId: solvingUserId?.toString() };
+        roomState.set(roomId, state);
+
+        socket.emit('evaluation-result', { ok: true, correct: true, details, attempt: attemptNum });
+
+        // Broadcast team leaderboard update to ALL players in room
+        io.to(roomId).emit('team-member-solved', {
+          team: teamName,
+          socketId: socket.id,
+          userId: solvingUserId?.toString(),
+          solveTimeMs: submitTimeMs,
+          attempts: attemptNum
+        });
+
+        // Check if ALL team members have solved
+        const allTeamSolved = myTeamSockets.length > 0 && myTeamSockets.every(sid => !!state.teamSolves[teamName][sid]);
+
+        if (allTeamSolved) {
+          // Whole team done — end the match now
+          if (state.finished) return; // double-check atomicity
+          state.finished = true;
+          roomState.set(roomId, state);
+          stopMatchTimer(roomId);
+          io.to(roomId).emit('match-locked', { roomId, winnerTeam: teamName });
+
+          const matchDurationMs = (state.timerDuration || MATCH_TIME_LIMIT_SECONDS) * 1000;
+          emitMatchFinished2v2(roomId, teamName, myTeamSockets, state);
+          runPostMatchPipeline2v2(roomId, teamName, state, question, submitTimeMs, matchDurationMs)
+            .catch(err => console.error('[Pipeline] Unhandled 2v2 error:', err.message));
+        } else {
+          const solvedCount = Object.keys(state.teamSolves[teamName]).length;
+          const emoji = teamName === 'blue' ? '🔵' : '🔴';
+          io.to(roomId).emit('score-update', {
+            user: 'System',
+            message: `${emoji} Team ${teamName}: ${solvedCount}/${myTeamSockets.length} solved! Waiting for teammate...`
+          });
+        }
         return;
       }
 
@@ -1359,37 +1447,20 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // Immediately mark finished to prevent any simultaneous win
+      // Immediately mark finished to prevent any simultaneous win (1v1 / BR)
       state.finished = true;
       roomState.set(roomId, state);
-
-      // Stop timer
       stopMatchTimer(roomId);
-
-      // Broadcast match-locked to freeze ALL editors immediately
       io.to(roomId).emit('match-locked', { roomId, winnerId: socket.id });
-
       socket.emit('evaluation-result', { ok: true, correct: true, details, attempt: attemptNum });
 
       const matchDurationMs = (state.timerDuration || MATCH_TIME_LIMIT_SECONDS) * 1000;
 
       if (state.type === '1v1') {
         const opponentId = state.players?.find(id => id !== socket.id);
-        // Phase 1: emit match-finished NOW (no DB dependency)
         emitMatchFinished1v1(roomId, socket.id, opponentId, state, submitTimeMs);
-        // Phase 2: save to DB and compute ratings in background
         runPostMatchPipeline1v1(roomId, socket.id, opponentId, state, question, submitTimeMs, matchDurationMs)
           .catch(err => console.error('[Pipeline] Unhandled 1v1 error:', err.message));
-      } else if (state.type === '2v2') {
-        const teams = state.teams || {};
-        const isRed = teams.red?.includes(socket.id);
-        const teamName = isRed ? 'red' : 'blue';
-        const winTeam = teams[teamName] || [];
-        // Phase 1: immediate
-        emitMatchFinished2v2(roomId, teamName, winTeam, state);
-        // Phase 2: background
-        runPostMatchPipeline2v2(roomId, teamName, state, question, submitTimeMs, matchDurationMs)
-          .catch(err => console.error('[Pipeline] Unhandled 2v2 error:', err.message));
       } else if (state.type === 'battle-royale') {
         handleBattleRoyaleSolve(roomId, socket.id, state, submitTimeMs)
           .catch(err => console.error('[Pipeline] Unhandled BR error:', err.message));
@@ -1459,44 +1530,95 @@ io.on('connection', (socket) => {
     return { winnerAttempts, loserAttempts };
   }
 
-  // Phase 1: 2v2 immediate emit
+  // Phase 1: 2v2 immediate emit — enriched with real per-player solve data
   function emitMatchFinished2v2(roomId, teamName, winningTeamSockets, state, customMessage) {
     const losingTeamName = teamName === 'red' ? 'blue' : 'red';
     const winningTeamIds = (state.teamIds || {})[teamName] || [];
     const losingTeamIds = (state.teamIds || {})[losingTeamName] || [];
+    const losingTeamSockets = (state.teams || {})[losingTeamName] || [];
     const question = roomQuestion.get(roomId);
     const difficulty = question?.difficulty || 'easy';
 
-    // Pre-compute XP
     const winnerXP = calculateXP('win', difficulty, '2v2');
     const loserXP = calculateXP('loss', difficulty, '2v2');
     const winnerCoins = calculateCoins('win', difficulty, '2v2');
     const loserCoins = calculateCoins('loss', difficulty, '2v2');
 
+    // Build per-player stats from tracked teamSolves — real solve times not null
+    const teamSolves = state.teamSolves || {};
+    const perPlayerStats = {};
+
+    // Winning team — pick solve data from teamSolves keyed by socketId
+    const winTeamSolves = teamSolves[teamName] || {};
+    winningTeamSockets.forEach(sid => {
+      const uid = (state.playerIds || []).find((_, idx) => (state.players || [])[idx] === sid)
+             || playerSessions.get(sid);
+      const solveData = winTeamSolves[sid] || {};
+      if (uid) {
+        perPlayerStats[uid.toString()] = {
+          solveTimeMs: solveData.solveTimeMs ?? null,
+          attempts:    solveData.attempts    ?? 1,
+          accuracy:    100,
+          isWinner:    true,
+          team:        teamName
+        };
+      }
+    });
+
+    // Losing team — no solve data (they didn't finish first)
+    losingTeamSockets.forEach(sid => {
+      const uid = (state.playerIds || []).find((_, idx) => (state.players || [])[idx] === sid)
+             || playerSessions.get(sid);
+      const loseSolveData = (teamSolves[losingTeamName] || {})[sid] || {};
+      if (uid) {
+        perPlayerStats[uid.toString()] = {
+          solveTimeMs: loseSolveData.solveTimeMs ?? null,
+          attempts:    loseSolveData.attempts    ?? 0,
+          accuracy:    0,
+          isWinner:    false,
+          team:        losingTeamName
+        };
+      }
+    });
+
+    // Build sorted leaderboard (winner team first, sorted by solve time)
+    const leaderboard = [
+      ...winningTeamSockets.map(sid => {
+        const uid = playerSessions.get(sid);
+        const d = (winTeamSolves[sid] || {});
+        return { userId: uid?.toString(), socketId: sid, team: teamName, solved: true, solveTimeMs: d.solveTimeMs ?? null, attempts: d.attempts ?? 1 };
+      }).sort((a, b) => (a.solveTimeMs ?? Infinity) - (b.solveTimeMs ?? Infinity)),
+      ...losingTeamSockets.map(sid => {
+        const uid = playerSessions.get(sid);
+        const d = ((teamSolves[losingTeamName] || {})[sid] || {});
+        return { userId: uid?.toString(), socketId: sid, team: losingTeamName, solved: !!d.solveTimeMs, solveTimeMs: d.solveTimeMs ?? null, attempts: d.attempts ?? 0 };
+      })
+    ];
+
     const payload = {
       roomId, type: '2v2',
-      winner: null, winnerTeam: teamName, winningPlayers: winningTeamSockets,
-      winningTeamIds,              // user IDs of winners
-      losingTeamIds,               // user IDs of losers
+      winner: null, winnerTeam: teamName,
+      winningPlayers: winningTeamSockets,
+      winningTeamIds,
+      losingTeamIds,
       matchId: null, draw: false, ratingChanges: [],
       xpChanges: {
         winner: { xp: winnerXP, coins: winnerCoins },
-        loser: { xp: loserXP, coins: loserCoins }
+        loser:  { xp: loserXP,  coins: loserCoins }
       },
-      // perPlayerStats: keyed by userId
-      perPlayerStats: {
-        ...Object.fromEntries(winningTeamIds.map(uid => [uid.toString(), { solveTimeMs: null, attempts: 1, accuracy: 100, isWinner: true }])),
-        ...Object.fromEntries(losingTeamIds.map(uid => [uid.toString(), { solveTimeMs: null, attempts: 0, accuracy: 0, isWinner: false }]))
-      },
-      message: customMessage || `✅ Team ${teamName} wins!`
+      perPlayerStats,
+      leaderboard,
+      message: customMessage || `✅ Team ${teamName === 'blue' ? '🔵 Blue' : '🔴 Red'} wins!`
     };
+
+    if (state) state.matchResultPayload = payload;
+
     console.log(`[Server] emitMatchFinished2v2 → room ${roomId}, team=${teamName}, winnerIds=${winningTeamIds}`);
     io.to(roomId).emit('match-finished', payload);
-    // REDUNDANT direct emits — guarantees delivery to every player
-    const allSocketIds = [...(state.teams[teamName] || []), ...(state.teams[losingTeamName] || [])];
+    // Redundant direct emits
+    const allSocketIds = [...winningTeamSockets, ...losingTeamSockets];
     allSocketIds.forEach(sid => io.to(sid).emit('match-finished', payload));
 
-    // Delay cleanup
     setTimeout(() => {
       roomState.delete(roomId);
       roomQuestion.delete(roomId);
@@ -2251,99 +2373,82 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Disconnect cleanup
+  // ──────────────────────────────────────────────────────────────
+  // Disconnect: graceful 30-second reconnect window for 1v1 / 2v2
+  // BR is eliminated immediately (no meaningful reconnection in BR).
+  // ──────────────────────────────────────────────────────────────
   socket.on('disconnect', async () => {
     queue1v1 = queue1v1.filter(s => s.id !== socket.id);
     queue2v2 = queue2v2.filter(s => s.id !== socket.id);
     queueBattleRoyale = queueBattleRoyale.filter(s => s.id !== socket.id);
 
     const userId = playerSessions.get(socket.id);
-    playerSessions.delete(socket.id);
+    // Do NOT delete playerSessions here — join-room needs it to detect same user reconnecting
 
-    // Handle disconnections in active rooms
     for (const [roomId, state] of roomState.entries()) {
-      if (state.players && state.players.includes(socket.id) && !state.finished) {
-        const remainingPlayers = state.players.filter(id => id !== socket.id);
+      if (!state.players?.includes(socket.id) || state.finished) continue;
 
-        if (state.type === 'battle-royale') {
-          // Eliminate disconnected player
-          if (!state.eliminated) state.eliminated = [];
-          if (!state.eliminated.includes(socket.id)) {
-            state.eliminated.push(socket.id);
-          }
-          io.to(roomId).emit('player-disconnected', { socketId: socket.id });
-        } else if (state.type === 'custom-battle-royale') {
-          // Custom BR: use brEngine to handle leave
-          brEngine.handlePlayerLeave(roomId, socket.id);
-        } else if (state.type === '1v1' && remainingPlayers.length === 1) {
-          // 1v1: Remaining player wins
-          const winnerId = remainingPlayers[0];
-          const winnerUserId = state.playerIds.find(id =>
-            playerSessions.get(winnerId) === id ||
-            state.players.indexOf(winnerId) === state.playerIds.indexOf(id)
-          ) || playerSessions.get(winnerId);
+      if (state.type === 'battle-royale') {
+        if (!state.eliminated) state.eliminated = [];
+        if (!state.eliminated.includes(socket.id)) state.eliminated.push(socket.id);
+        io.to(roomId).emit('player-disconnected', { socketId: socket.id });
 
-          state.finished = true;
-          state.winner = winnerId;
-          roomState.set(roomId, state);
+      } else if (state.type === 'custom-battle-royale') {
+        brEngine.handlePlayerLeave(roomId, socket.id);
 
-          // Update winner stats
-          if (winnerUserId) {
-            try {
-              const winner = await User.findById(winnerUserId);
-              if (winner) {
-                winner.wins += 1;
-                winner.matches += 1;
-                winner.xp += calculateXP('win', 'easy', '1v1');
-                winner.coins += calculateCoins('win', 'easy', '1v1');
-                await winner.save();
-              }
-            } catch (err) {
-              console.error('Error updating winner stats:', err);
+      } else if (state.type === '1v1' || state.type === '2v2') {
+        // ─── GRACEFUL RECONNECT WINDOW ───────────────────────────────
+        console.log(`[Server] ${socket.id} disconnected from ${state.type} ${roomId} — waiting 30s for reconnect`);
+        io.to(roomId).emit('receive-message', {
+          user: 'System',
+          message: '⚠️ A player disconnected — waiting 30 seconds for reconnect...',
+          type: 'system'
+        });
+
+        // Store timer so join-room can cancel it on reconnect
+        if (!state.disconnectTimers) state.disconnectTimers = {};
+        state.disconnectTimers[socket.id] = setTimeout(async () => {
+          const s = roomState.get(roomId);
+          if (!s || s.finished) return; // match already resolved normally
+
+          console.log(`[Server] Forfeit timer expired for ${socket.id} in ${roomId}`);
+
+          if (s.type === '1v1') {
+            const remaining = s.players.find(id => id !== socket.id);
+            if (remaining) {
+              s.finished = true;
+              roomState.set(roomId, s);
+              const q = roomQuestion.get(roomId);
+              const dur = (s.timerDuration || 1800) * 1000;
+              emitMatchFinished1v1(roomId, remaining, socket.id, s, 0, 'Opponent disconnected. You win! 🎉');
+              runPostMatchPipeline1v1(roomId, remaining, socket.id, s, q, 0, dur)
+                .catch(e => console.error('[Disconnect Forfeit 1v1]', e.message));
             }
+          } else if (s.type === '2v2') {
+            const isRed = s.teams?.red?.includes(socket.id);
+            const leavingTeam = isRed ? 'red' : 'blue';
+            const winTeam = isRed ? 'blue' : 'red';
+            const winTeamSockets = s.teams?.[winTeam] || [];
+            s.finished = true;
+            roomState.set(roomId, s);
+            const q = roomQuestion.get(roomId);
+            const dur = (s.timerDuration || 1800) * 1000;
+            emitMatchFinished2v2(roomId, winTeam, winTeamSockets, s, 'Opposing team disconnected. You win! 🎉');
+            runPostMatchPipeline2v2(roomId, winTeam, s, q, 0, dur)
+              .catch(e => console.error('[Disconnect Forfeit 2v2]', e.message));
           }
+        }, 30000);
 
-          // Notify remaining player (send directly to winner)
-          io.to(winnerId).emit('match-finished', {
-            roomId,
-            winner: 'you', // Special value to indicate the receiving player won
-            winnerUserId,
-            message: 'Opponent disconnected. You win!',
-            reason: 'opponent-disconnected'
-          });
-
-          io.to(winnerId).emit('receive-message', {
-            user: 'System',
-            message: 'Opponent disconnected. You won the match! 🎉',
-            type: 'system'
-          });
-        } else if (state.type === '2v2') {
-          // 2v2: Handle team disconnection
-          const disconnectedTeam = state.teams.red.includes(socket.id) ? 'red' : 'blue';
-          const winningTeam = disconnectedTeam === 'red' ? 'blue' : 'red';
-
-          state.finished = true;
-          state.winnerTeam = winningTeam;
-          roomState.set(roomId, state);
-
-          // Notify remaining players
-          io.to(roomId).emit('match-finished', {
-            roomId,
-            winnerTeam: winningTeam,
-            message: `Opposing team disconnected. Team ${winningTeam} wins!`,
-            reason: 'opponent-disconnected'
-          });
-
-          io.to(roomId).emit('receive-message', {
-            user: 'System',
-            message: `Opposing team disconnected. Team ${winningTeam} wins! 🎉`,
-            type: 'system'
-          });
-        } else {
-          io.to(roomId).emit('player-disconnected', { socketId: socket.id });
-        }
+        roomState.set(roomId, state);
       }
     }
+
+    // Clean up playerSessions after 35s (after forfeit timer window)
+    setTimeout(() => {
+      if (playerSessions.get(socket.id) === userId) {
+        playerSessions.delete(socket.id);
+      }
+    }, 35000);
 
     console.log(`❌ Disconnected: ${socket.id}`);
   });
