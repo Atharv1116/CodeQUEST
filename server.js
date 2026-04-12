@@ -1662,8 +1662,13 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('[Pipeline 1v1] Error (UI already updated):', err.message);
     }
-    // Push enriched data to both players (they may still be on analysis screen)
-    io.to(roomId).emit('rating-update', { matchId: savedMatch?._id?.toString() || null, ratingChanges });
+    const ratingPayload = { matchId: savedMatch?._id?.toString() || null, ratingChanges };
+    // Emit to the room (catches anyone still in it) AND directly to each player's socket
+    // by socket ID — the winner navigates away in 2.5s so may have left the room already.
+    io.to(roomId).emit('rating-update', ratingPayload);
+    if (winnerId) io.to(winnerId).emit('rating-update', ratingPayload);
+    if (opponentId) io.to(opponentId).emit('rating-update', ratingPayload);
+    console.log(`[Pipeline 1v1] rating-update sent → room ${roomId}, winner ${winnerId}, opp ${opponentId}`);
   }
 
   // Phase 2: background pipeline for 2v2
@@ -1694,7 +1699,10 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('[Pipeline 2v2] Error (UI already updated):', err.message);
     }
-    io.to(roomId).emit('rating-update', { matchId: savedMatch?._id?.toString() || null, ratingChanges });
+    const rating2v2Payload = { matchId: savedMatch?._id?.toString() || null, ratingChanges };
+    io.to(roomId).emit('rating-update', rating2v2Payload);
+    // Direct emit to each player so they receive it even after leaving the room
+    [...winningTeam, ...losingTeam].forEach(sid => { if (sid) io.to(sid).emit('rating-update', rating2v2Payload); });
   }
 
   async function handleBattleRoyaleSolve(roomId, socketId, state, submitTimeMs) {
