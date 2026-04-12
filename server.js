@@ -246,7 +246,9 @@ app.get('/api/match/:matchId/ai-analysis', authenticateToken, async (req, res) =
       user
     });
 
-    res.json({ ok: true, analysis });
+    // analysis is an object: { analysis, solved, attempts, solveTimeSec, weakTopics, topicTags }
+    // Spread it so the client receives flat fields, no nested object render crash
+    res.json({ ok: true, ...analysis });
   } catch (error) {
     console.error('[AI Analysis] Error:', error.message);
     res.status(500).json({ ok: false, error: error.message });
