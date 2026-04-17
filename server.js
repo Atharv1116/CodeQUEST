@@ -1235,28 +1235,43 @@ io.on('connection', (socket) => {
         let finalExpected = '';
         let allPassed = true;
 
-        for (const tc of testCasesToRun) {
-            finalExpected = tc.output || '';
-            // Resolve stdin: prefer inputOverride if it's a real non-empty string,
-            // else use the test-case input. Never send literal "undefined" or null.
-            const rawOverride = inputOverride;
-            const stdinToUse =
-              rawOverride !== undefined && rawOverride !== null && String(rawOverride).trim() !== '' && String(rawOverride) !== 'undefined'
-                ? String(rawOverride)
-                : (tc.input || '');
-            const tempRes = await submitToJudge0({
-              source_code: code,
-              language_id,
-              stdin: stdinToUse,
-              expected_output: finalExpected
-            });
+        const rawOverride = inputOverride;
+        const hasCustomInput =
+          rawOverride !== undefined && rawOverride !== null && String(rawOverride).trim() !== '' && String(rawOverride) !== 'undefined';
 
-            if (!tempRes || !tempRes.correct) {
-               allPassed = false;
-               judgeRes = tempRes;
-               break;
-            }
-            judgeRes = tempRes;
+        if (hasCustomInput) {
+          // If custom input is provided, just run ONCE against that input.
+          // Don't compare expected_output because we don't naturally know what it should be.
+          const stdinToUse = String(rawOverride);
+          judgeRes = await submitToJudge0({
+            source_code: code,
+            language_id,
+            stdin: stdinToUse,
+            expected_output: '' // no expected output for custom user input
+          });
+          
+          if (!judgeRes || judgeRes.status?.id >= 5) {
+             allPassed = false;
+          }
+        } else {
+          // Run against all test cases
+          for (const tc of testCasesToRun) {
+              finalExpected = tc.output || '';
+              const stdinToUse = tc.input || '';
+              const tempRes = await submitToJudge0({
+                source_code: code,
+                language_id,
+                stdin: stdinToUse,
+                expected_output: finalExpected
+              });
+
+              if (!tempRes || !tempRes.correct) {
+                 allPassed = false;
+                 judgeRes = tempRes;
+                 break;
+              }
+              judgeRes = tempRes;
+          }
         }
 
         if (!judgeRes) {

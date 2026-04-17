@@ -99,7 +99,15 @@ async function submitToJudge0({ source_code, language_id, stdin, expected_output
         // 1. Code ran without runtime/compile error (status 3 or 4 — 4 can't happen now)
         // 2. Our trimmed comparison matches
         const ranCleanly = statusId === 3 || statusId === 4; // 4 won't occur since we don't send expected_output
-        const correct = ranCleanly && expectedTrimmed !== '' && stdoutTrimmed === expectedTrimmed;
+        
+        let correct;
+        if (expectedTrimmed === '') {
+          // If no expected output was provided (e.g., custom RUN input), 
+          // we just consider it correct if it ran without errors.
+          correct = ranCleanly;
+        } else {
+          correct = ranCleanly && stdoutTrimmed === expectedTrimmed;
+        }
 
         console.log(
           `[Judge0] status=${data.status?.description} | got="${stdoutTrimmed}" | expected="${expectedTrimmed}" | correct=${correct}`
