@@ -1162,7 +1162,7 @@ io.on('connection', (socket) => {
   // -------- SUBMISSION ENGINE — Server Authority --------
   // Run: unlimited attempts on sample test cases, no state change
   // Submit: hidden test cases, submission locking, atomic win check
-  socket.on('submit-code', async ({ roomId, code, language_id, inputOverride, isSubmit = true }) => {
+  socket.on('submit-code', async ({ roomId, code, language_id: rawLangId, inputOverride, isSubmit = true }) => {
     try {
       const state = roomState.get(roomId);
       const question = roomQuestion.get(roomId);
@@ -1170,6 +1170,19 @@ io.on('connection', (socket) => {
       if (!state || !question) {
         socket.emit('evaluation-result', { ok: false, message: 'Room or question not found' });
         return;
+      }
+
+      // Resolve language_id — frontend may send a string name or a numeric ID
+      let language_id = rawLangId;
+      if (typeof rawLangId === 'string' && isNaN(Number(rawLangId))) {
+        const mapped = LANGUAGE_IDS[rawLangId.toLowerCase()];
+        if (!mapped) {
+          socket.emit('evaluation-result', { ok: false, message: `Unsupported language: ${rawLangId}` });
+          return;
+        }
+        language_id = mapped;
+      } else {
+        language_id = Number(rawLangId) || 71; // default to Python 3
       }
 
       // --- GATE 1: match already finished ---
@@ -1470,8 +1483,15 @@ io.on('connection', (socket) => {
 
     } catch (err) {
       submissionLocks.delete(socket.id); // safety unlock
-      console.error('submit-code error', err);
-      socket.emit('evaluation-result', { ok: false, message: 'Server evaluation failed' });
+      console.error('[submit-code] Unhandled error:', err?.response?.data || err?.message || err);
+      const userMsg = err?.response?.status === 401
+        ? 'Code evaluation API key expired. Contact admin.'
+        : err?.response?.status === 429
+        ? 'Evaluation service is temporarily rate-limited. Please try again in a few seconds.'
+        : err?.code === 'ECONNABORTED' || err?.code === 'ETIMEDOUT'
+        ? 'Evaluation service timed out. Please try again.'
+        : `Server evaluation failed: ${err?.message || 'unknown error'}`;
+      socket.emit('evaluation-result', { ok: false, message: userMsg });
     }
   });
 
