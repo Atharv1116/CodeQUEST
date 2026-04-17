@@ -1,232 +1,152 @@
 [
   {
     "title": "Sum of Two Numbers",
-    "description": "Given two integers a and b, output their sum.",
-    "inputFormat": "Two space-separated integers a b",
-    "outputFormat": "Single integer (a + b)",
+    "description": "Given two integers a and b on the same line, print their sum.",
+    "inputFormat": "Two space-separated integers a and b",
+    "outputFormat": "Single integer: a + b",
     "sampleInput": "12 15",
     "sampleOutput": "27",
     "difficulty": "easy",
-    "language": "python",
-    "solution": "const fs = require('fs');\nconst data = fs.readFileSync(0,'utf8').trim().split(/\\s+/).map(Number);\nconsole.log(data[0] + data[1]);",
+    "tags": ["math", "basics"],
+    "solution": "a, b = map(int, input().split())\nprint(a + b)",
     "testCases": [
-      {
-        "input": "10 20",
-        "output": "30",
-        "isHidden": true
-      },
-      {
-        "input": "-5 5",
-        "output": "0",
-        "isHidden": true
-      }
+      { "input": "10 20", "output": "30", "isHidden": true },
+      { "input": "3 7",   "output": "10", "isHidden": true }
     ]
   },
   {
     "title": "Factorial",
-    "description": "Compute n! for 0 ≤ n ≤ 12.",
+    "description": "Given a non-negative integer n (0 ≤ n ≤ 10), print n! (n factorial).",
     "inputFormat": "Single integer n",
     "outputFormat": "Single integer n!",
     "sampleInput": "4",
     "sampleOutput": "24",
     "difficulty": "easy",
-    "language": "python",
-    "solution": "import sys\nn = int(sys.stdin.read().strip())\nres = 1\nfor i in range(2, n+1):\n    res *= i\nprint(res)",
+    "tags": ["math", "loops"],
+    "solution": "n = int(input())\nresult = 1\nfor i in range(2, n + 1):\n    result *= i\nprint(result)",
     "testCases": [
-      {
-        "input": "0",
-        "output": "1",
-        "isHidden": true
-      },
-      {
-        "input": "6",
-        "output": "720",
-        "isHidden": true
-      }
+      { "input": "0", "output": "1",   "isHidden": true },
+      { "input": "5", "output": "120", "isHidden": true }
     ]
   },
   {
-    "title": "Reverse String",
-    "description": "Given a string s, print it reversed.",
-    "inputFormat": "Single line string",
-    "outputFormat": "Reversed string",
-    "sampleInput": "world",
-    "sampleOutput": "dlrow",
+    "title": "Reverse a String",
+    "description": "Given a single word (no spaces), print it reversed.",
+    "inputFormat": "A single word (no spaces)",
+    "outputFormat": "The reversed word",
+    "sampleInput": "hello",
+    "sampleOutput": "olleh",
     "difficulty": "easy",
-    "language": "cpp",
-    "solution": "#include <bits/stdc++.h>\nusing namespace std;\nint main(){ios::sync_with_stdio(false);cin.tie(nullptr);string s;getline(cin,s);reverse(s.begin(), s.end());cout<<s;}\n",
+    "tags": ["strings", "basics"],
+    "solution": "s = input()\nprint(s[::-1])",
     "testCases": [
-      {
-        "input": "code",
-        "output": "edoc",
-        "isHidden": true
-      },
-      {
-        "input": "racecar",
-        "output": "racecar",
-        "isHidden": true
-      }
+      { "input": "code",    "output": "edoc",    "isHidden": true },
+      { "input": "racecar", "output": "racecar", "isHidden": true }
     ]
   },
   {
     "title": "Find Maximum",
-    "description": "Given an array of integers, find and print the maximum value.",
-    "inputFormat": "First line: integer n (array size). Second line: n space-separated integers.",
-    "outputFormat": "Single integer (maximum value)",
+    "description": "Given n integers on a single line, print the largest one.",
+    "inputFormat": "First line: integer n. Second line: n space-separated integers.",
+    "outputFormat": "Single integer (the maximum value)",
     "sampleInput": "4\n10 20 5 15",
     "sampleOutput": "20",
     "difficulty": "easy",
-    "language": "python",
-    "solution": "import sys\nlines = sys.stdin.read().strip().split('\\n')\nn = int(lines[0])\narr = list(map(int, lines[1].split()))\nprint(max(arr))",
+    "tags": ["arrays", "basics"],
+    "solution": "n = int(input())\narr = list(map(int, input().split()))\nprint(max(arr))",
     "testCases": [
-      {
-        "input": "3\n-1 -5 -2",
-        "output": "-1",
-        "isHidden": true
-      },
-      {
-        "input": "1\n42",
-        "output": "42",
-        "isHidden": true
-      }
+      { "input": "3\n1 2 3",     "output": "3",  "isHidden": true },
+      { "input": "5\n9 3 7 1 5", "output": "9",  "isHidden": true }
     ]
   },
   {
     "title": "Count Vowels",
-    "description": "Count the number of vowels (a, e, i, o, u) in a given string. Case insensitive.",
-    "inputFormat": "Single line string",
+    "description": "Count how many vowels (a, e, i, o, u) are in the given word. Lowercase only.",
+    "inputFormat": "A single lowercase word",
     "outputFormat": "Single integer (vowel count)",
-    "sampleInput": "Programming",
-    "sampleOutput": "3",
+    "sampleInput": "hello",
+    "sampleOutput": "2",
     "difficulty": "easy",
-    "language": "python",
-    "solution": "import sys\ns = sys.stdin.read().strip().lower()\nvowels = 'aeiou'\ncount = sum(1 for c in s if c in vowels)\nprint(count)",
+    "tags": ["strings", "basics"],
+    "solution": "s = input()\ncount = sum(1 for c in s if c in 'aeiou')\nprint(count)",
     "testCases": [
-      {
-        "input": "rhythm",
-        "output": "0",
-        "isHidden": true
-      },
-      {
-        "input": "Aeiou",
-        "output": "5",
-        "isHidden": true
-      }
+      { "input": "python", "output": "1", "isHidden": true },
+      { "input": "aeiou",  "output": "5", "isHidden": true }
     ]
   },
   {
     "title": "Palindrome Check",
-    "description": "Check if a given string is a palindrome (reads the same forwards and backwards). Ignore spaces and case.",
-    "inputFormat": "Single line string",
-    "outputFormat": "Print 'YES' if palindrome, 'NO' otherwise",
+    "description": "Check if a given single word is a palindrome. Print YES or NO.",
+    "inputFormat": "A single lowercase word (no spaces)",
+    "outputFormat": "YES or NO",
     "sampleInput": "madam",
     "sampleOutput": "YES",
     "difficulty": "easy",
-    "language": "python",
-    "solution": "import sys\ns = sys.stdin.read().strip().replace(' ', '').lower()\nif s == s[::-1]:\n    print('YES')\nelse:\n    print('NO')",
+    "tags": ["strings", "basics"],
+    "solution": "s = input()\nif s == s[::-1]:\n    print('YES')\nelse:\n    print('NO')",
     "testCases": [
-      {
-        "input": "No lemon no melon",
-        "output": "YES",
-        "isHidden": true
-      },
-      {
-        "input": "hello",
-        "output": "NO",
-        "isHidden": true
-      }
+      { "input": "level",  "output": "YES", "isHidden": true },
+      { "input": "hello",  "output": "NO",  "isHidden": true }
     ]
   },
   {
     "title": "FizzBuzz",
-    "description": "For integers from 1 to n, print 'Fizz' if divisible by 3, 'Buzz' if divisible by 5, 'FizzBuzz' if divisible by both, otherwise print the number.",
+    "description": "For integers 1 to n, print Fizz (divisible by 3), Buzz (divisible by 5), FizzBuzz (both), or the number.",
     "inputFormat": "Single integer n",
     "outputFormat": "n lines of output",
     "sampleInput": "6",
     "sampleOutput": "1\n2\nFizz\n4\nBuzz\nFizz",
     "difficulty": "easy",
-    "language": "python",
-    "solution": "import sys\nn = int(sys.stdin.read().strip())\nfor i in range(1, n+1):\n    if i % 15 == 0:\n        print('FizzBuzz')\n    elif i % 3 == 0:\n        print('Fizz')\n    elif i % 5 == 0:\n        print('Buzz')\n    else:\n        print(i)",
+    "tags": ["loops", "math"],
+    "solution": "n = int(input())\nfor i in range(1, n + 1):\n    if i % 15 == 0:\n        print('FizzBuzz')\n    elif i % 3 == 0:\n        print('Fizz')\n    elif i % 5 == 0:\n        print('Buzz')\n    else:\n        print(i)",
     "testCases": [
-      {
-        "input": "3",
-        "output": "1\n2\nFizz",
-        "isHidden": true
-      },
-      {
-        "input": "5",
-        "output": "1\n2\nFizz\n4\nBuzz",
-        "isHidden": true
-      }
+      { "input": "3", "output": "1\n2\nFizz",          "isHidden": true },
+      { "input": "5", "output": "1\n2\nFizz\n4\nBuzz", "isHidden": true }
     ]
   },
   {
     "title": "Array Sum",
     "description": "Calculate the sum of all elements in an array.",
-    "inputFormat": "First line: integer n (array size). Second line: n space-separated integers.",
-    "outputFormat": "Single integer (sum of all elements)",
+    "inputFormat": "First line: integer n. Second line: n space-separated integers.",
+    "outputFormat": "Single integer (the sum)",
     "sampleInput": "3\n10 20 30",
     "sampleOutput": "60",
     "difficulty": "easy",
-    "language": "python",
-    "solution": "import sys\nlines = sys.stdin.read().strip().split('\\n')\nn = int(lines[0])\narr = list(map(int, lines[1].split()))\nprint(sum(arr))",
+    "tags": ["arrays", "math"],
+    "solution": "n = int(input())\narr = list(map(int, input().split()))\nprint(sum(arr))",
     "testCases": [
-      {
-        "input": "2\n-10 10",
-        "output": "0",
-        "isHidden": true
-      },
-      {
-        "input": "5\n1 1 1 1 1",
-        "output": "5",
-        "isHidden": true
-      }
+      { "input": "4\n1 2 3 4", "output": "10", "isHidden": true },
+      { "input": "2\n5 5",     "output": "10", "isHidden": true }
     ]
   },
   {
     "title": "Even or Odd",
-    "description": "Determine if a given integer is even or odd.",
+    "description": "Determine whether a given integer is even or odd.",
     "inputFormat": "Single integer n",
-    "outputFormat": "Print 'EVEN' or 'ODD'",
+    "outputFormat": "Print EVEN or ODD",
     "sampleInput": "10",
     "sampleOutput": "EVEN",
     "difficulty": "easy",
-    "language": "python",
-    "solution": "import sys\nn = int(sys.stdin.read().strip())\nif n % 2 == 0:\n    print('EVEN')\nelse:\n    print('ODD')",
+    "tags": ["math", "basics"],
+    "solution": "n = int(input())\nif n % 2 == 0:\n    print('EVEN')\nelse:\n    print('ODD')",
     "testCases": [
-      {
-        "input": "0",
-        "output": "EVEN",
-        "isHidden": true
-      },
-      {
-        "input": "-3",
-        "output": "ODD",
-        "isHidden": true
-      }
+      { "input": "7",  "output": "ODD",  "isHidden": true },
+      { "input": "12", "output": "EVEN", "isHidden": true }
     ]
   },
   {
     "title": "String Length",
-    "description": "Return the length of a given string (excluding newline).",
-    "inputFormat": "Single line string",
-    "outputFormat": "Single integer (length of string)",
+    "description": "Print the number of characters in the given word.",
+    "inputFormat": "A single word (at least 1 character, no spaces)",
+    "outputFormat": "Single integer (character count)",
     "sampleInput": "CodeQuest",
     "sampleOutput": "9",
     "difficulty": "easy",
-    "language": "python",
-    "solution": "import sys\ns = sys.stdin.read().strip()\nprint(len(s))",
+    "tags": ["strings", "basics"],
+    "solution": "s = input()\nprint(len(s))",
     "testCases": [
-      {
-        "input": "",
-        "output": "0",
-        "isHidden": true
-      },
-      {
-        "input": "a",
-        "output": "1",
-        "isHidden": true
-      }
+      { "input": "hi",     "output": "2", "isHidden": true },
+      { "input": "python", "output": "6", "isHidden": true }
     ]
   }
 ]
