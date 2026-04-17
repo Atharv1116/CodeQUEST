@@ -1,152 +1,152 @@
 [
   {
-    "title": "Sum of Two Numbers",
-    "description": "Given two integers a and b on the same line, print their sum.",
+    "title": "Multiply Two Numbers",
+    "description": "Given two integers a and b, print their product.",
     "inputFormat": "Two space-separated integers a and b",
-    "outputFormat": "Single integer: a + b",
-    "sampleInput": "12 15",
-    "sampleOutput": "27",
-    "difficulty": "easy",
-    "tags": ["math", "basics"],
-    "solution": "a, b = map(int, input().split())\nprint(a + b)",
-    "testCases": [
-      { "input": "10 20", "output": "30", "isHidden": true },
-      { "input": "3 7",   "output": "10", "isHidden": true }
-    ]
-  },
-  {
-    "title": "Factorial",
-    "description": "Given a non-negative integer n (0 ≤ n ≤ 10), print n! (n factorial).",
-    "inputFormat": "Single integer n",
-    "outputFormat": "Single integer n!",
-    "sampleInput": "4",
-    "sampleOutput": "24",
-    "difficulty": "easy",
-    "tags": ["math", "loops"],
-    "solution": "n = int(input())\nresult = 1\nfor i in range(2, n + 1):\n    result *= i\nprint(result)",
-    "testCases": [
-      { "input": "0", "output": "1",   "isHidden": true },
-      { "input": "5", "output": "120", "isHidden": true }
-    ]
-  },
-  {
-    "title": "Reverse a String",
-    "description": "Given a single word (no spaces), print it reversed.",
-    "inputFormat": "A single word (no spaces)",
-    "outputFormat": "The reversed word",
-    "sampleInput": "hello",
-    "sampleOutput": "olleh",
-    "difficulty": "easy",
-    "tags": ["strings", "basics"],
-    "solution": "s = input()\nprint(s[::-1])",
-    "testCases": [
-      { "input": "code",    "output": "edoc",    "isHidden": true },
-      { "input": "racecar", "output": "racecar", "isHidden": true }
-    ]
-  },
-  {
-    "title": "Find Maximum",
-    "description": "Given n integers on a single line, print the largest one.",
-    "inputFormat": "First line: integer n. Second line: n space-separated integers.",
-    "outputFormat": "Single integer (the maximum value)",
-    "sampleInput": "4\n10 20 5 15",
+    "outputFormat": "Single integer: a * b",
+    "sampleInput": "4 5",
     "sampleOutput": "20",
     "difficulty": "easy",
-    "tags": ["arrays", "basics"],
-    "solution": "n = int(input())\narr = list(map(int, input().split()))\nprint(max(arr))",
+    "tags": ["math", "basics"],
+    "solution": "a, b = map(int, input().split())\nprint(a * b)",
     "testCases": [
-      { "input": "3\n1 2 3",     "output": "3",  "isHidden": true },
-      { "input": "5\n9 3 7 1 5", "output": "9",  "isHidden": true }
+      { "input": "3 6",  "output": "18", "isHidden": true },
+      { "input": "7 8",  "output": "56", "isHidden": true }
     ]
   },
   {
-    "title": "Count Vowels",
-    "description": "Count how many vowels (a, e, i, o, u) are in the given word. Lowercase only.",
-    "inputFormat": "A single lowercase word",
-    "outputFormat": "Single integer (vowel count)",
-    "sampleInput": "hello",
-    "sampleOutput": "2",
-    "difficulty": "easy",
-    "tags": ["strings", "basics"],
-    "solution": "s = input()\ncount = sum(1 for c in s if c in 'aeiou')\nprint(count)",
-    "testCases": [
-      { "input": "python", "output": "1", "isHidden": true },
-      { "input": "aeiou",  "output": "5", "isHidden": true }
-    ]
-  },
-  {
-    "title": "Palindrome Check",
-    "description": "Check if a given single word is a palindrome. Print YES or NO.",
-    "inputFormat": "A single lowercase word (no spaces)",
-    "outputFormat": "YES or NO",
-    "sampleInput": "madam",
-    "sampleOutput": "YES",
-    "difficulty": "easy",
-    "tags": ["strings", "basics"],
-    "solution": "s = input()\nif s == s[::-1]:\n    print('YES')\nelse:\n    print('NO')",
-    "testCases": [
-      { "input": "level",  "output": "YES", "isHidden": true },
-      { "input": "hello",  "output": "NO",  "isHidden": true }
-    ]
-  },
-  {
-    "title": "FizzBuzz",
-    "description": "For integers 1 to n, print Fizz (divisible by 3), Buzz (divisible by 5), FizzBuzz (both), or the number.",
+    "title": "Sum of First N Numbers",
+    "description": "Given a positive integer n, print the sum of all integers from 1 to n.",
     "inputFormat": "Single integer n",
-    "outputFormat": "n lines of output",
+    "outputFormat": "Single integer (sum from 1 to n)",
+    "sampleInput": "5",
+    "sampleOutput": "15",
+    "difficulty": "easy",
+    "tags": ["math", "loops"],
+    "solution": "n = int(input())\nprint(n * (n + 1) // 2)",
+    "testCases": [
+      { "input": "10", "output": "55",  "isHidden": true },
+      { "input": "3",  "output": "6",   "isHidden": true }
+    ]
+  },
+  {
+    "title": "Square of a Number",
+    "description": "Given an integer n, print its square (n * n).",
+    "inputFormat": "Single integer n",
+    "outputFormat": "Single integer (n squared)",
     "sampleInput": "6",
-    "sampleOutput": "1\n2\nFizz\n4\nBuzz\nFizz",
-    "difficulty": "easy",
-    "tags": ["loops", "math"],
-    "solution": "n = int(input())\nfor i in range(1, n + 1):\n    if i % 15 == 0:\n        print('FizzBuzz')\n    elif i % 3 == 0:\n        print('Fizz')\n    elif i % 5 == 0:\n        print('Buzz')\n    else:\n        print(i)",
-    "testCases": [
-      { "input": "3", "output": "1\n2\nFizz",          "isHidden": true },
-      { "input": "5", "output": "1\n2\nFizz\n4\nBuzz", "isHidden": true }
-    ]
-  },
-  {
-    "title": "Array Sum",
-    "description": "Calculate the sum of all elements in an array.",
-    "inputFormat": "First line: integer n. Second line: n space-separated integers.",
-    "outputFormat": "Single integer (the sum)",
-    "sampleInput": "3\n10 20 30",
-    "sampleOutput": "60",
-    "difficulty": "easy",
-    "tags": ["arrays", "math"],
-    "solution": "n = int(input())\narr = list(map(int, input().split()))\nprint(sum(arr))",
-    "testCases": [
-      { "input": "4\n1 2 3 4", "output": "10", "isHidden": true },
-      { "input": "2\n5 5",     "output": "10", "isHidden": true }
-    ]
-  },
-  {
-    "title": "Even or Odd",
-    "description": "Determine whether a given integer is even or odd.",
-    "inputFormat": "Single integer n",
-    "outputFormat": "Print EVEN or ODD",
-    "sampleInput": "10",
-    "sampleOutput": "EVEN",
+    "sampleOutput": "36",
     "difficulty": "easy",
     "tags": ["math", "basics"],
-    "solution": "n = int(input())\nif n % 2 == 0:\n    print('EVEN')\nelse:\n    print('ODD')",
+    "solution": "n = int(input())\nprint(n * n)",
     "testCases": [
-      { "input": "7",  "output": "ODD",  "isHidden": true },
-      { "input": "12", "output": "EVEN", "isHidden": true }
+      { "input": "9",  "output": "81",  "isHidden": true },
+      { "input": "12", "output": "144", "isHidden": true }
     ]
   },
   {
-    "title": "String Length",
-    "description": "Print the number of characters in the given word.",
-    "inputFormat": "A single word (at least 1 character, no spaces)",
-    "outputFormat": "Single integer (character count)",
-    "sampleInput": "CodeQuest",
+    "title": "Largest of Three Numbers",
+    "description": "Given three integers on the same line, print the largest one.",
+    "inputFormat": "Three space-separated integers",
+    "outputFormat": "Single integer (the largest)",
+    "sampleInput": "3 9 5",
     "sampleOutput": "9",
+    "difficulty": "easy",
+    "tags": ["math", "basics"],
+    "solution": "a, b, c = map(int, input().split())\nprint(max(a, b, c))",
+    "testCases": [
+      { "input": "10 2 8",  "output": "10", "isHidden": true },
+      { "input": "1 1 1",   "output": "1",  "isHidden": true }
+    ]
+  },
+  {
+    "title": "Find Minimum",
+    "description": "Given n integers, find and print the smallest value.",
+    "inputFormat": "First line: integer n. Second line: n space-separated integers.",
+    "outputFormat": "Single integer (the minimum value)",
+    "sampleInput": "4\n10 20 5 15",
+    "sampleOutput": "5",
+    "difficulty": "easy",
+    "tags": ["arrays", "basics"],
+    "solution": "n = int(input())\narr = list(map(int, input().split()))\nprint(min(arr))",
+    "testCases": [
+      { "input": "3\n7 2 9",       "output": "2", "isHidden": true },
+      { "input": "5\n4 4 4 4 4",   "output": "4", "isHidden": true }
+    ]
+  },
+  {
+    "title": "Count Even Numbers",
+    "description": "Given n integers, count how many of them are even.",
+    "inputFormat": "First line: integer n. Second line: n space-separated integers.",
+    "outputFormat": "Single integer (count of even numbers)",
+    "sampleInput": "5\n1 2 3 4 5",
+    "sampleOutput": "2",
+    "difficulty": "easy",
+    "tags": ["arrays", "math"],
+    "solution": "n = int(input())\narr = list(map(int, input().split()))\nprint(sum(1 for x in arr if x % 2 == 0))",
+    "testCases": [
+      { "input": "4\n2 4 6 8",   "output": "4", "isHidden": true },
+      { "input": "3\n1 3 5",     "output": "0", "isHidden": true }
+    ]
+  },
+  {
+    "title": "Positive Negative or Zero",
+    "description": "Given an integer, print POSITIVE, NEGATIVE, or ZERO.",
+    "inputFormat": "Single integer n",
+    "outputFormat": "POSITIVE, NEGATIVE, or ZERO",
+    "sampleInput": "7",
+    "sampleOutput": "POSITIVE",
+    "difficulty": "easy",
+    "tags": ["math", "basics"],
+    "solution": "n = int(input())\nif n > 0:\n    print('POSITIVE')\nelif n < 0:\n    print('NEGATIVE')\nelse:\n    print('ZERO')",
+    "testCases": [
+      { "input": "-4", "output": "NEGATIVE", "isHidden": true },
+      { "input": "0",  "output": "ZERO",     "isHidden": true }
+    ]
+  },
+  {
+    "title": "Multiplication Table",
+    "description": "Given an integer n, print the multiplication table of n from 1 to 5.",
+    "inputFormat": "Single integer n",
+    "outputFormat": "5 lines, each showing n * i = result (for i from 1 to 5)",
+    "sampleInput": "3",
+    "sampleOutput": "3 x 1 = 3\n3 x 2 = 6\n3 x 3 = 9\n3 x 4 = 12\n3 x 5 = 15",
+    "difficulty": "easy",
+    "tags": ["loops", "math"],
+    "solution": "n = int(input())\nfor i in range(1, 6):\n    print(f'{n} x {i} = {n * i}')",
+    "testCases": [
+      { "input": "2", "output": "2 x 1 = 2\n2 x 2 = 4\n2 x 3 = 6\n2 x 4 = 8\n2 x 5 = 10",     "isHidden": true },
+      { "input": "5", "output": "5 x 1 = 5\n5 x 2 = 10\n5 x 3 = 15\n5 x 4 = 20\n5 x 5 = 25", "isHidden": true }
+    ]
+  },
+  {
+    "title": "Count Characters in Word",
+    "description": "Given a single word, print the number of characters it contains.",
+    "inputFormat": "A single word (no spaces)",
+    "outputFormat": "Single integer (number of characters)",
+    "sampleInput": "python",
+    "sampleOutput": "6",
     "difficulty": "easy",
     "tags": ["strings", "basics"],
     "solution": "s = input()\nprint(len(s))",
     "testCases": [
-      { "input": "hi",     "output": "2", "isHidden": true },
-      { "input": "python", "output": "6", "isHidden": true }
+      { "input": "code",  "output": "4", "isHidden": true },
+      { "input": "quest", "output": "5", "isHidden": true }
+    ]
+  },
+  {
+    "title": "Repeat Word N Times",
+    "description": "Given a word and a number n, print the word repeated n times separated by spaces.",
+    "inputFormat": "First line: a single word. Second line: integer n.",
+    "outputFormat": "The word repeated n times, separated by single spaces.",
+    "sampleInput": "hello\n3",
+    "sampleOutput": "hello hello hello",
+    "difficulty": "easy",
+    "tags": ["strings", "loops"],
+    "solution": "word = input()\nn = int(input())\nprint(' '.join([word] * n))",
+    "testCases": [
+      { "input": "hi\n4",    "output": "hi hi hi hi",           "isHidden": true },
+      { "input": "code\n2",  "output": "code code",              "isHidden": true }
     ]
   }
 ]
