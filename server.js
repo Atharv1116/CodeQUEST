@@ -1218,10 +1218,17 @@ io.on('connection', (socket) => {
 
         for (const tc of testCasesToRun) {
             finalExpected = tc.output || '';
+            // Resolve stdin: prefer inputOverride if it's a real non-empty string,
+            // else use the test-case input. Never send literal "undefined" or null.
+            const rawOverride = inputOverride;
+            const stdinToUse =
+              rawOverride !== undefined && rawOverride !== null && String(rawOverride).trim() !== '' && String(rawOverride) !== 'undefined'
+                ? String(rawOverride)
+                : (tc.input || '');
             const tempRes = await submitToJudge0({
               source_code: code,
               language_id,
-              stdin: inputOverride !== undefined ? String(inputOverride) : (tc.input || ''),
+              stdin: stdinToUse,
               expected_output: finalExpected
             });
 
@@ -1300,10 +1307,12 @@ io.on('connection', (socket) => {
 
         for (const tc of testCasesToRun) {
             finalExpected = tc.output || '';
+            // Always use the stored test-case stdin for submit evaluation
+            const submitStdin = tc.input != null ? String(tc.input) : '';
             lastRes = await submitToJudge0({
               source_code: code,
               language_id,
-              stdin: tc.input || '',
+              stdin: submitStdin,
               expected_output: finalExpected
             });
 
