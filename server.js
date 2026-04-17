@@ -382,35 +382,54 @@ async function handleTimerExpiry(roomId) {
 }
 
 // Helper: Get random question
+// NOTE: Use findOne().lean() + random skip instead of $aggregate($sample).
+// $aggregate bypasses Mongoose's subdocument transforms, which can cause
+// testCases[].input / sampleInput to appear undefined in certain environments.
 async function getRandomQuestion(difficulty = null) {
   try {
     const query = difficulty ? { difficulty } : {};
-    const q = await Question.aggregate([
-      { $match: query },
-      { $sample: { size: 1 } }
-    ]);
 
-    if (!q || q.length === 0) {
-      console.warn(`⚠️ No questions found in database${difficulty ? ` for difficulty: ${difficulty}` : ''}. Using fallback question.`);
+    const count = await Question.countDocuments(query);
+    if (count === 0) {
+      console.warn(`⚠️ No questions found${difficulty ? ` for difficulty: ${difficulty}` : ''}. Using fallback.`);
       return {
         title: 'Default Problem',
         description: 'Solve this problem',
         sampleInput: 'test',
         sampleOutput: 'test',
+        testCases: [{ input: 'test', output: 'test', isHidden: false }],
         difficulty: difficulty || 'easy',
         _id: null
       };
     }
 
-    console.log(`✅ Question loaded: "${q[0].title}" (${q[0].difficulty})`);
-    return q[0];
+    const skip = Math.floor(Math.random() * count);
+    const q = await Question.findOne(query).skip(skip).lean();
+
+    if (!q) {
+      return {
+        title: 'Default Problem',
+        description: 'Solve this problem',
+        sampleInput: 'test',
+        sampleOutput: 'test',
+        testCases: [{ input: 'test', output: 'test', isHidden: false }],
+        difficulty: difficulty || 'easy',
+        _id: null
+      };
+    }
+
+    console.log(
+      `Question loaded: "${q.title}" (${q.difficulty}) | sampleInput="${q.sampleInput}" | testCases=${q.testCases?.length ?? 0}`
+    );
+    return q;
   } catch (error) {
-    console.error('❌ Error loading question from database:', error.message);
+    console.error('Error loading question from database:', error.message);
     return {
       title: 'Default Problem',
       description: 'Solve this problem',
       sampleInput: 'test',
       sampleOutput: 'test',
+      testCases: [{ input: 'test', output: 'test', isHidden: false }],
       difficulty: difficulty || 'easy',
       _id: null
     };
@@ -1302,6 +1321,12 @@ io.on('connection', (socket) => {
         if (testCasesToRun.length === 0) {
            testCasesToRun.push({ input: '1 2', output: '3', isHidden: false });
         }
+
+        // Debug: log every test case input so we can spot missing stdin
+        console.log(`[Submit] question="${question.title}" | ${testCasesToRun.length} test cases`);
+        testCasesToRun.forEach((tc, i) => {
+          console.log(`  tc[${i}] input="${tc.input}" output="${tc.output}"`);
+        });
 
         let lastRes = null;
 
