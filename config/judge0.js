@@ -17,8 +17,16 @@ const LANGUAGE_IDS = {
 
 /**
  * Submit code to Judge0 and poll for the result.
- * Returns a result object with { correct, status, stdout, stderr, ... }
- * Never throws — returns { correct: false, error: 'message' } on failure.
+ *
+ * IMPORTANT: We do NOT send `expected_output` to Judge0.
+ * Reason: Judge0 does a strict byte-level comparison which fails on trailing
+ * newlines, whitespace differences, etc., producing "Wrong Answer" even when
+ * the output is semantically correct.
+ *
+ * Instead, we manually compare stdout.trim() === expected_output.trim() after
+ * receiving the result. This is far more reliable.
+ *
+ * Returns { correct, status, stdout, stderr, ... } — never throws.
  */
 async function submitToJudge0({ source_code, language_id, stdin, expected_output, time_limit = 5 }) {
   const headers = {
@@ -35,7 +43,8 @@ async function submitToJudge0({ source_code, language_id, stdin, expected_output
         source_code,
         language_id,
         stdin: stdin || '',
-        expected_output: expected_output || '',
+        // Do NOT send expected_output — let Judge0 just run the code and
+        // return the raw stdout. We compare ourselves below.
         cpu_time_limit: time_limit,
         wall_time_limit: time_limit + 3
       },
@@ -61,7 +70,7 @@ async function submitToJudge0({ source_code, language_id, stdin, expected_output
     return { correct: false, status: { id: 0, description: `Judge0 POST error: ${err.message}` }, stdout: '', stderr: err.message };
   }
 
-  // Polling loop — max 30 attempts, 1s apart (handles slow servers)
+  // Polling loop — max 30 attempts, 1s apart
   for (let tries = 0; tries < 30; tries++) {
     await new Promise(r => setTimeout(r, 1000));
 
@@ -78,31 +87,33 @@ async function submitToJudge0({ source_code, language_id, stdin, expected_output
       const data = res.data;
       const statusId = data?.status?.id;
 
-      // status.id >= 3 means done (Accepted, WA, TLE, CE, RE, etc.)
+      // status.id >= 3 means done:
+      //   3 = Accepted (code ran successfully)
+      //   4 = Wrong Answer (only if we sent expected_output — we don't, so won't happen)
+      //   5 = TLE, 6 = CE, 7-13 = RE, etc.
       if (data && statusId >= 3) {
         const stdoutTrimmed   = (data.stdout || '').trim();
         const expectedTrimmed = (expected_output || '').trim();
 
-        // Judge0 marks Accepted (3) if expected_output was provided AND matches
-        // We also do our own comparison as a fallback
-        const correct = statusId === 3
-          ? (data.stdout != null && stdoutTrimmed === expectedTrimmed)
-          : false;
+        // Only consider "correct" if:
+        // 1. Code ran without runtime/compile error (status 3 or 4 — 4 can't happen now)
+        // 2. Our trimmed comparison matches
+        const ranCleanly = statusId === 3 || statusId === 4; // 4 won't occur since we don't send expected_output
+        const correct = ranCleanly && expectedTrimmed !== '' && stdoutTrimmed === expectedTrimmed;
 
-        if (!correct) {
-          console.log(
-            `[Judge0] Wrong: status=${data.status?.description}, got="${stdoutTrimmed}", expected="${expectedTrimmed}"`
-          );
-        }
+        console.log(
+          `[Judge0] status=${data.status?.description} | got="${stdoutTrimmed}" | expected="${expectedTrimmed}" | correct=${correct}`
+        );
+
         return { ...data, correct };
       }
     } catch (pollErr) {
       console.error('[Judge0] Poll error:', pollErr.message);
-      // Keep polling — transient network errors shouldn't abort
+      // Keep polling — transient errors shouldn't abort
     }
   }
 
-  // Timed-out waiting for result
+  // Timed-out polling
   console.error('[Judge0] Polling timed out for token:', token);
   return {
     status: { id: 4, description: 'Time limit exceeded waiting for Judge0' },
